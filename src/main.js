@@ -638,7 +638,7 @@ function parsePosesText(text) {
     poses.push({
       name,
       position: new THREE.Vector3(nums[0], nums[1], nums[2]),
-      quaternion: new THREE.Quaternion(nums[4], nums[5], nums[6], nums[3]),
+      quaternion: new THREE.Quaternion(nums[4], nums[5], nums[6], nums[3]).invert(),
     })
   }
   return poses
