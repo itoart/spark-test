@@ -44,6 +44,7 @@ function createSkyDome() {
     depthTest: false,
     uniforms: {
       topColor: { value: new THREE.Color('#c8e6ff') },
+      midColor: { value: new THREE.Color('#e4f2ff') },
       horizonColor: { value: new THREE.Color('#ffffff') },
       bottomColor: { value: new THREE.Color('#000000') },
     },
@@ -58,14 +59,26 @@ function createSkyDome() {
     fragmentShader: `
       varying vec3 vWorldDir;
       uniform vec3 topColor;
+      uniform vec3 midColor;
       uniform vec3 horizonColor;
       uniform vec3 bottomColor;
 
       void main() {
         float t = clamp(vWorldDir.y * 0.5 + 0.5, 0.0, 1.0);
-        vec3 base = mix(bottomColor, topColor, smoothstep(0.5, 1.0, t));
-        float horizonBand = exp(-pow((t - 0.5) / 0.045, 2.0));
-        vec3 color = mix(base, horizonColor, horizonBand * 0.92);
+
+        // Upper hemisphere: white-ish blue at horizon -> richer blue toward zenith.
+        float skyTop = smoothstep(0.62, 1.0, t);
+        vec3 upperColor = mix(midColor, topColor, skyTop);
+
+        // Lower hemisphere: white near horizon -> black toward nadir.
+        float groundRise = smoothstep(0.0, 0.45, t);
+        vec3 lowerColor = mix(bottomColor, horizonColor, groundRise);
+
+        vec3 base = mix(lowerColor, upperColor, step(0.5, t));
+
+        // Thin bright horizon band on top of the base gradient.
+        float horizonBand = exp(-pow((t - 0.5) / 0.035, 2.0));
+        vec3 color = mix(base, horizonColor, horizonBand * 0.78);
         gl_FragColor = vec4(color, 1.0);
       }
     `,
