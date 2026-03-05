@@ -6,7 +6,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 const MOVE_SPEED = 5
 const LOOK_SPEED = 1.1
 const MOBILE_MOVE_SPEED_MULTIPLIER = 0.5
-const MOBILE_LOOK_SPEED_MULTIPLIER = 0.2
+const MOBILE_LOOK_SPEED_MULTIPLIER = 0.3
 const MOVE_ACCEL = 12
 const MOVE_DECEL = 7
 const EXTERNAL_MOVE_DAMPING = 7
