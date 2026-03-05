@@ -27,6 +27,7 @@ const LOD_ENABLE_DELAY_SECONDS = 0.2
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 const ORBIT_RADIUS = INITIAL_CAMERA_POSITION.distanceTo(INITIAL_TARGET)
+const SCENE_ALIGNMENT_ROTATION_X = Math.PI
 
 const scene = new THREE.Scene()
 scene.background = null
@@ -103,6 +104,12 @@ fileInput.accept = '.ply,.sog,.sogs,.spz,.splat,.ksplat,.json,.zip'
 fileInput.style.display = 'none'
 document.body.appendChild(fileInput)
 
+const poseInput = document.createElement('input')
+poseInput.type = 'file'
+poseInput.accept = '.txt,.csv'
+poseInput.style.display = 'none'
+document.body.appendChild(poseInput)
+
 const controlsToggle = document.createElement('button')
 controlsToggle.className = 'controls-toggle'
 controlsToggle.type = 'button'
@@ -116,6 +123,7 @@ overlay.className = 'controls-hint is-collapsed'
 overlay.innerHTML = `
   <strong>Controls</strong>
   <button class="menu-load-btn" type="button">Load Splat</button>
+  <button class="menu-load-btn menu-load-poses-btn" type="button">Load Poses</button>
   <span>${isCoarsePointer ? 'Left pad: Move' : 'Left drag: Orbit'}</span>
   <span>${isCoarsePointer ? 'Right pad: Look around' : 'Right drag: Look around'}</span>
   <span>${isCoarsePointer ? 'UP/DOWN: Vertical move' : 'Wheel: Forward/Back'}</span>
@@ -584,6 +592,135 @@ const spark = new SparkRenderer({
 scene.add(spark)
 
 let activeSplat = null
+const poseMarkersRoot = new THREE.Group()
+poseMarkersRoot.rotation.x = SCENE_ALIGNMENT_ROTATION_X
+scene.add(poseMarkersRoot)
+
+function clearPoseMarkers() {
+  for (const child of [...poseMarkersRoot.children]) {
+    child.traverse((node) => {
+      if (node.geometry) {
+        node.geometry.dispose()
+      }
+      if (node.material) {
+        if (Array.isArray(node.material)) {
+          for (const material of node.material) {
+            material.dispose()
+          }
+        } else {
+          node.material.dispose()
+        }
+      }
+    })
+    poseMarkersRoot.remove(child)
+  }
+}
+
+function parsePosesText(text) {
+  const rows = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'))
+
+  const poses = []
+  for (const row of rows) {
+    const parts = row.split(',').map((value) => value.trim())
+    if (parts.length < 8) {
+      continue
+    }
+    const [name, x, y, z, qw, qx, qy, qz] = parts
+    const nums = [x, y, z, qw, qx, qy, qz].map((value) => Number(value))
+    if (nums.some((value) => !Number.isFinite(value))) {
+      continue
+    }
+    poses.push({
+      name,
+      position: new THREE.Vector3(nums[0], nums[1], nums[2]),
+      quaternion: new THREE.Quaternion(nums[4], nums[5], nums[6], nums[3]),
+    })
+  }
+  return poses
+}
+
+function createPoseMarker(pose) {
+  const marker = new THREE.Group()
+  marker.position.copy(pose.position)
+  marker.quaternion.copy(pose.quaternion)
+
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(0.075, 10, 10),
+    new THREE.MeshBasicMaterial({
+      color: 0xff8b3d,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+      opacity: 0.92,
+    })
+  )
+  body.renderOrder = 10
+  marker.add(body)
+
+  const forwardLine = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 0, -0.45),
+    ]),
+    new THREE.LineBasicMaterial({
+      color: 0x2ac3ff,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+      opacity: 0.9,
+    })
+  )
+  forwardLine.renderOrder = 10
+  marker.add(forwardLine)
+
+  const upLine = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 0.3, 0),
+    ]),
+    new THREE.LineBasicMaterial({
+      color: 0x7dff8a,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+      opacity: 0.9,
+    })
+  )
+  upLine.renderOrder = 10
+  marker.add(upLine)
+
+  return marker
+}
+
+async function loadPoseFile(file) {
+  lodStatus.classList.remove('is-hidden')
+  lodStatus.textContent = `Loading poses: ${file.name}`
+  try {
+    const text = await file.text()
+    const poses = parsePosesText(text)
+    if (poses.length === 0) {
+      lodStatus.textContent = 'Pose file parse failed: no valid rows'
+      return
+    }
+
+    clearPoseMarkers()
+    for (const pose of poses) {
+      poseMarkersRoot.add(createPoseMarker(pose))
+    }
+
+    lodStatus.textContent = `Loaded poses: ${poses.length}`
+    window.setTimeout(() => {
+      lodStatus.classList.add('is-hidden')
+    }, 1800)
+  } catch (error) {
+    console.error('Failed to load poses', error)
+    const reason = error instanceof Error ? error.message : String(error)
+    lodStatus.textContent = `Pose file load failed: ${reason.slice(0, 64)}`
+  }
+}
 
 async function loadLocalSplat(file) {
   const loadingText = loadingOverlay.querySelector('.loading-text')
@@ -604,7 +741,7 @@ async function loadLocalSplat(file) {
       enableLod: false,
       behindFoveate: 1.0,
     })
-    nextSplat.rotation.x = Math.PI
+    nextSplat.rotation.x = SCENE_ALIGNMENT_ROTATION_X
     scene.add(nextSplat)
     await nextSplat.initialized
 
@@ -636,12 +773,26 @@ menuLoadButton?.addEventListener('click', () => {
   fileInput.click()
 })
 
+const menuLoadPosesButton = overlay.querySelector('.menu-load-poses-btn')
+menuLoadPosesButton?.addEventListener('click', () => {
+  poseInput.value = ''
+  poseInput.click()
+})
+
 fileInput.addEventListener('change', async () => {
   const file = fileInput.files?.[0]
   if (!file) {
     return
   }
   await loadLocalSplat(file)
+})
+
+poseInput.addEventListener('change', async () => {
+  const file = poseInput.files?.[0]
+  if (!file) {
+    return
+  }
+  await loadPoseFile(file)
 })
 
 function hasGeneratedLod(mesh) {
