@@ -12,7 +12,7 @@
     "vite": "^7.3.1"
   },
   "dependencies": {
-    "@sparkjsdev/spark": "https://codeload.github.com/sparkjsdev/spark/tar.gz/refs/heads/v2.0.0-preview",
+    "@sparkjsdev/spark": "0.1.9",
     "three": "^0.183.1"
   }
 }
