@@ -37,13 +37,6 @@ renderer.setSize(window.innerWidth, window.innerHeight)
 document.body.innerHTML = ''
 document.body.appendChild(renderer.domElement)
 
-const loadButton = document.createElement('button')
-loadButton.className = 'load-file-btn'
-loadButton.type = 'button'
-loadButton.textContent = 'Load Local Splat'
-loadButton.setAttribute('aria-label', 'Load local splat file')
-document.body.appendChild(loadButton)
-
 const fileInput = document.createElement('input')
 fileInput.type = 'file'
 fileInput.accept = '.ply,.sog,.sogs,.spz,.splat,.ksplat,.json,.zip'
@@ -62,6 +55,7 @@ const overlay = document.createElement('div')
 overlay.className = 'controls-hint is-collapsed'
 overlay.innerHTML = `
   <strong>Controls</strong>
+  <button class="menu-load-btn" type="button">Load Splat</button>
   <span>${isCoarsePointer ? 'Left pad: Move' : 'Left drag: Orbit'}</span>
   <span>${isCoarsePointer ? 'Right pad: Look around' : 'Wheel: Zoom'}</span>
   <span>${isCoarsePointer ? 'UP/DOWN: Vertical move' : 'Right drag or Shift+Left drag: Pan'}</span>
@@ -422,7 +416,8 @@ async function loadLocalSplat(file) {
   }
 }
 
-loadButton.addEventListener('click', () => {
+const menuLoadButton = overlay.querySelector('.menu-load-btn')
+menuLoadButton?.addEventListener('click', () => {
   fileInput.value = ''
   fileInput.click()
 })
