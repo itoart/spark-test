@@ -43,7 +43,7 @@ function createSkyDome() {
     depthWrite: false,
     depthTest: false,
     uniforms: {
-      topColor: { value: new THREE.Color('#9ccfff') },
+      topColor: { value: new THREE.Color('#c8e6ff') },
       horizonColor: { value: new THREE.Color('#ffffff') },
       bottomColor: { value: new THREE.Color('#000000') },
     },
@@ -63,7 +63,7 @@ function createSkyDome() {
 
       void main() {
         float t = clamp(vWorldDir.y * 0.5 + 0.5, 0.0, 1.0);
-        vec3 base = mix(bottomColor, topColor, smoothstep(0.0, 1.0, t));
+        vec3 base = mix(bottomColor, topColor, smoothstep(0.5, 1.0, t));
         float horizonBand = exp(-pow((t - 0.5) / 0.045, 2.0));
         vec3 color = mix(base, horizonColor, horizonBand * 0.92);
         gl_FragColor = vec4(color, 1.0);
