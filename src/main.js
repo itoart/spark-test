@@ -21,33 +21,7 @@ const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 
 const scene = new THREE.Scene()
-
-function createSkyGradientTexture() {
-  const canvas = document.createElement('canvas')
-  canvas.width = 2
-  canvas.height = 1024
-  const ctx = canvas.getContext('2d')
-  if (!ctx) {
-    return new THREE.Color('#9ccfff')
-  }
-
-  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height)
-  gradient.addColorStop(0.0, '#9ccfff')
-  gradient.addColorStop(0.48, '#eef7ff')
-  gradient.addColorStop(0.52, '#ffffff')
-  gradient.addColorStop(1.0, '#000000')
-  ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  texture.minFilter = THREE.LinearFilter
-  texture.magFilter = THREE.LinearFilter
-  texture.generateMipmaps = false
-  return texture
-}
-
-scene.background = createSkyGradientTexture()
+scene.background = null
 
 const camera = new THREE.PerspectiveCamera(
   60,
@@ -61,6 +35,49 @@ const renderer = new THREE.WebGLRenderer({ antialias: false })
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
 renderer.setSize(window.innerWidth, window.innerHeight)
 renderer.setClearColor('#000000', 1)
+
+function createSkyDome() {
+  const geometry = new THREE.SphereGeometry(2000, 48, 32)
+  const material = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    depthTest: false,
+    uniforms: {
+      topColor: { value: new THREE.Color('#9ccfff') },
+      horizonColor: { value: new THREE.Color('#ffffff') },
+      bottomColor: { value: new THREE.Color('#000000') },
+    },
+    vertexShader: `
+      varying vec3 vWorldDir;
+      void main() {
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vWorldDir = normalize(worldPos.xyz - cameraPosition);
+        gl_Position = projectionMatrix * viewMatrix * worldPos;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vWorldDir;
+      uniform vec3 topColor;
+      uniform vec3 horizonColor;
+      uniform vec3 bottomColor;
+
+      void main() {
+        float t = clamp(vWorldDir.y * 0.5 + 0.5, 0.0, 1.0);
+        vec3 base = mix(bottomColor, topColor, smoothstep(0.0, 1.0, t));
+        float horizonBand = exp(-pow((t - 0.5) / 0.045, 2.0));
+        vec3 color = mix(base, horizonColor, horizonBand * 0.92);
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `,
+  })
+
+  const dome = new THREE.Mesh(geometry, material)
+  dome.renderOrder = -1000
+  return dome
+}
+
+const skyDome = createSkyDome()
+scene.add(skyDome)
 
 document.body.innerHTML = ''
 document.body.appendChild(renderer.domElement)
@@ -636,6 +653,7 @@ function updateAdaptiveLod(deltaTime) {
 function animate() {
   requestAnimationFrame(animate)
   const deltaTime = clock.getDelta()
+  skyDome.position.copy(camera.position)
   updateLook(deltaTime)
   updateMovement(deltaTime)
   if (isCoarsePointer) {
