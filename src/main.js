@@ -5,6 +5,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const MOVE_SPEED = 5
 const LOOK_SPEED = 1.1
+const MOBILE_MOVE_SPEED_MULTIPLIER = 0.5
+const MOBILE_LOOK_SPEED_MULTIPLIER = 1 / 3
 const MOVE_ACCEL = 12
 const MOVE_DECEL = 7
 const EXTERNAL_MOVE_DAMPING = 7
@@ -871,8 +873,10 @@ function updateLook(deltaTime) {
     }
     requestCoarseLod()
 
-    lookState.yaw -= touchInput.lookX * LOOK_SPEED * deltaTime
-    lookState.pitch -= touchInput.lookY * LOOK_SPEED * deltaTime
+    lookState.yaw -=
+      touchInput.lookX * LOOK_SPEED * MOBILE_LOOK_SPEED_MULTIPLIER * deltaTime
+    lookState.pitch -=
+      touchInput.lookY * LOOK_SPEED * MOBILE_LOOK_SPEED_MULTIPLIER * deltaTime
     lookState.pitch = THREE.MathUtils.clamp(lookState.pitch, -1.45, 1.45)
     applyLookDirection()
     return
@@ -959,15 +963,24 @@ function updateMovement(deltaTime) {
   movement.delta.set(0, 0, 0)
   movement.delta.addScaledVector(
     movement.forward,
-    inertiaState.moveInput.z * MOVE_SPEED * deltaTime
+    inertiaState.moveInput.z *
+      MOVE_SPEED *
+      (isCoarsePointer ? MOBILE_MOVE_SPEED_MULTIPLIER : 1) *
+      deltaTime
   )
   movement.delta.addScaledVector(
     movement.right,
-    inertiaState.moveInput.x * MOVE_SPEED * deltaTime
+    inertiaState.moveInput.x *
+      MOVE_SPEED *
+      (isCoarsePointer ? MOBILE_MOVE_SPEED_MULTIPLIER : 1) *
+      deltaTime
   )
   movement.delta.addScaledVector(
     movement.up,
-    inertiaState.moveInput.y * MOVE_SPEED * deltaTime
+    inertiaState.moveInput.y *
+      MOVE_SPEED *
+      (isCoarsePointer ? MOBILE_MOVE_SPEED_MULTIPLIER : 1) *
+      deltaTime
   )
   movement.delta.addScaledVector(inertiaState.externalVelocity, deltaTime)
 
