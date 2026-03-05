@@ -32,6 +32,20 @@ canvas {
   display: block;
 }
 
+.load-file-btn {
+  position: fixed;
+  top: 22px;
+  left: 22px;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(8, 8, 8, 0.82);
+  color: inherit;
+  font-size: 0.82rem;
+  z-index: 30;
+}
+
 .controls-toggle {
   position: fixed;
   top: 22px;

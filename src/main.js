@@ -1,6 +1,6 @@
 import './style.css'
 import * as THREE from 'three'
-import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark'
+import { SparkRenderer, SplatMesh, SplatFileType } from '@sparkjsdev/spark'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const MOVE_SPEED = 10
@@ -36,6 +36,19 @@ renderer.setSize(window.innerWidth, window.innerHeight)
 
 document.body.innerHTML = ''
 document.body.appendChild(renderer.domElement)
+
+const loadButton = document.createElement('button')
+loadButton.className = 'load-file-btn'
+loadButton.type = 'button'
+loadButton.textContent = 'Load Local Splat'
+loadButton.setAttribute('aria-label', 'Load local splat file')
+document.body.appendChild(loadButton)
+
+const fileInput = document.createElement('input')
+fileInput.type = 'file'
+fileInput.accept = '.ply,.sog,.sogs,.spz,.splat,.ksplat,.json,.zip'
+fileInput.style.display = 'none'
+document.body.appendChild(fileInput)
 
 const controlsToggle = document.createElement('button')
 controlsToggle.className = 'controls-toggle'
@@ -361,6 +374,66 @@ const splat = new SplatMesh({
 })
 splat.rotation.x = Math.PI
 scene.add(splat)
+let activeSplat = splat
+
+function inferFileType(fileName) {
+  const lower = fileName.toLowerCase()
+  if (lower.endsWith('.ply')) return SplatFileType.PLY
+  if (lower.endsWith('.spz')) return SplatFileType.SPZ
+  if (lower.endsWith('.splat')) return SplatFileType.SPLAT
+  if (lower.endsWith('.ksplat')) return SplatFileType.KSPLAT
+  if (lower.endsWith('.sog') || lower.endsWith('.sogs') || lower.endsWith('.json')) {
+    return SplatFileType.PCSOGS
+  }
+  if (lower.endsWith('.zip')) return SplatFileType.PCSOGSZIP
+  return undefined
+}
+
+async function loadLocalSplat(file) {
+  lodStatus.classList.remove('is-hidden')
+  lodStatus.textContent = `Loading local file: ${file.name}`
+
+  try {
+    const fileBytes = new Uint8Array(await file.arrayBuffer())
+    const nextSplat = new SplatMesh({
+      fileBytes,
+      fileName: file.name,
+      fileType: inferFileType(file.name),
+      lod: ENABLE_LOD,
+      nonLod: true,
+      enableLod: false,
+      behindFoveate: 1.0,
+    })
+    nextSplat.rotation.x = Math.PI
+    scene.add(nextSplat)
+    await nextSplat.initialized
+
+    const prevSplat = activeSplat
+    activeSplat = nextSplat
+    scene.remove(prevSplat)
+    prevSplat.dispose()
+
+    await initializeLod(activeSplat)
+    resetView()
+  } catch (error) {
+    console.error('Failed to load local splat', error)
+    const reason = error instanceof Error ? error.message : String(error)
+    lodStatus.textContent = `Local file load failed: ${reason.slice(0, 64)}`
+  }
+}
+
+loadButton.addEventListener('click', () => {
+  fileInput.value = ''
+  fileInput.click()
+})
+
+fileInput.addEventListener('change', async () => {
+  const file = fileInput.files?.[0]
+  if (!file) {
+    return
+  }
+  await loadLocalSplat(file)
+})
 
 function hasGeneratedLod(mesh) {
   return Boolean(mesh.packedSplats?.lodSplats || mesh.extSplats?.lodSplats)
@@ -375,9 +448,9 @@ function initializeLodRamp() {
   spark.lodSplatScale = LOD_SCALE_COARSE
 }
 
-async function initializeLod() {
+async function initializeLod(targetSplat = activeSplat) {
   if (!ENABLE_LOD) {
-    splat.enableLod = false
+    targetSplat.enableLod = false
     lodStatus.textContent = 'LoD disabled for testing'
     window.setTimeout(() => {
       lodStatus.classList.add('is-hidden')
@@ -387,16 +460,16 @@ async function initializeLod() {
 
   try {
     lodStatus.textContent = 'Loading splats...'
-    await splat.initialized
+    await targetSplat.initialized
 
-    const canCreateLod = typeof splat.createLodSplats === 'function'
-    if (!hasGeneratedLod(splat) && canCreateLod) {
+    const canCreateLod = typeof targetSplat.createLodSplats === 'function'
+    if (!hasGeneratedLod(targetSplat) && canCreateLod) {
       lodStatus.textContent = 'Generating LoD tree in Spark...'
-      await splat.createLodSplats({ quality: true })
+      await targetSplat.createLodSplats({ quality: true })
     }
 
-    if (hasGeneratedLod(splat)) {
-      splat.enableLod = true
+    if (hasGeneratedLod(targetSplat)) {
+      targetSplat.enableLod = true
       initializeLodRamp()
       lodStatus.textContent = 'LoD enabled (coarse -> fine)'
     } else if (!canCreateLod) {
@@ -412,7 +485,7 @@ async function initializeLod() {
     console.error('Failed to initialize LoD tree', error)
     const reason = error instanceof Error ? error.message : String(error)
     lodStatus.textContent = `LoD disabled: ${reason.slice(0, 64)}`
-    splat.enableLod = false
+    targetSplat.enableLod = false
   }
 }
 
@@ -505,8 +578,8 @@ function updateAdaptiveLod(deltaTime) {
   if (coarseRequested || motion > LOD_MOTION_THRESHOLD) {
     lodRampState.settleTime = 0
     lodRampState.lodEnableCooldown = LOD_ENABLE_DELAY_SECONDS
-    if (splat.enableLod) {
-      splat.enableLod = false
+    if (activeSplat.enableLod) {
+      activeSplat.enableLod = false
     }
     spark.lodSplatScale = THREE.MathUtils.lerp(
       spark.lodSplatScale,
@@ -518,8 +591,8 @@ function updateAdaptiveLod(deltaTime) {
       0,
       lodRampState.lodEnableCooldown - deltaTime
     )
-    if (!splat.enableLod && lodRampState.lodEnableCooldown === 0) {
-      splat.enableLod = true
+    if (!activeSplat.enableLod && lodRampState.lodEnableCooldown === 0) {
+      activeSplat.enableLod = true
     }
 
     lodRampState.settleTime = Math.min(
