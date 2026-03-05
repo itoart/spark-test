@@ -21,7 +21,33 @@ const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 
 const scene = new THREE.Scene()
-scene.background = new THREE.Color('#9ccfff')
+
+function createSkyGradientTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 2
+  canvas.height = 1024
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    return new THREE.Color('#9ccfff')
+  }
+
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height)
+  gradient.addColorStop(0.0, '#9ccfff')
+  gradient.addColorStop(0.48, '#eef7ff')
+  gradient.addColorStop(0.52, '#ffffff')
+  gradient.addColorStop(1.0, '#000000')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.minFilter = THREE.LinearFilter
+  texture.magFilter = THREE.LinearFilter
+  texture.generateMipmaps = false
+  return texture
+}
+
+scene.background = createSkyGradientTexture()
 
 const camera = new THREE.PerspectiveCamera(
   60,
@@ -34,7 +60,7 @@ camera.position.copy(INITIAL_CAMERA_POSITION)
 const renderer = new THREE.WebGLRenderer({ antialias: false })
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
 renderer.setSize(window.innerWidth, window.innerHeight)
-renderer.setClearColor('#9ccfff', 1)
+renderer.setClearColor('#000000', 1)
 
 document.body.innerHTML = ''
 document.body.appendChild(renderer.domElement)
