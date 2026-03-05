@@ -4,6 +4,7 @@ import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const MOVE_SPEED = 10
+const LOOK_SPEED = 2.2
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 0, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 0, 0)
@@ -25,18 +26,34 @@ renderer.setSize(window.innerWidth, window.innerHeight)
 document.body.innerHTML = ''
 document.body.appendChild(renderer.domElement)
 
+const controlsToggle = document.createElement('button')
+controlsToggle.className = 'controls-toggle'
+controlsToggle.type = 'button'
+controlsToggle.textContent = '☰'
+controlsToggle.setAttribute('aria-label', 'Toggle controls help')
+controlsToggle.setAttribute('aria-expanded', 'false')
+document.body.appendChild(controlsToggle)
+
 const overlay = document.createElement('div')
-overlay.className = 'controls-hint'
+overlay.className = 'controls-hint is-collapsed'
 overlay.innerHTML = `
   <strong>Controls</strong>
-  <span>${isCoarsePointer ? 'One finger: Orbit' : 'Left drag: Orbit'}</span>
-  <span>${isCoarsePointer ? 'Two fingers: Pan/Zoom' : 'Wheel: Zoom'}</span>
-  <span>${isCoarsePointer ? 'Use on-screen pad: Move' : 'Right drag or Shift+Left drag: Pan'}</span>
-  <span>W/A/S/D: Move</span>
-  <span>Q/E: Move down/up</span>
+  <span>${isCoarsePointer ? 'Left pad: Move' : 'Left drag: Orbit'}</span>
+  <span>${isCoarsePointer ? 'Right pad: Look around' : 'Wheel: Zoom'}</span>
+  <span>${isCoarsePointer ? 'UP/DOWN: Vertical move' : 'Right drag or Shift+Left drag: Pan'}</span>
+  <span>${isCoarsePointer ? 'Double tap: Reset view' : 'W/A/S/D: Move'}</span>
+  <span>${isCoarsePointer ? 'Q/E keys also work' : 'Q/E: Move down/up'}</span>
   <span>R: Reset</span>
 `
 document.body.appendChild(overlay)
+
+controlsToggle.addEventListener('click', () => {
+  overlay.classList.toggle('is-collapsed')
+  controlsToggle.setAttribute(
+    'aria-expanded',
+    String(!overlay.classList.contains('is-collapsed'))
+  )
+})
 
 const lodStatus = document.createElement('div')
 lodStatus.className = 'lod-status'
@@ -48,6 +65,7 @@ controls.enableDamping = true
 controls.dampingFactor = 0.08
 controls.screenSpacePanning = true
 controls.target.copy(INITIAL_TARGET)
+controls.enabled = !isCoarsePointer
 controls.update()
 
 renderer.domElement.addEventListener('contextmenu', (event) => {
@@ -70,17 +88,38 @@ const movement = {
   delta: new THREE.Vector3(),
 }
 
-const clock = new THREE.Clock()
 const touchInput = {
   moveX: 0,
   moveY: 0,
+  lookX: 0,
+  lookY: 0,
+}
+
+const lookState = {
+  yaw: 0,
+  pitch: 0,
+}
+
+const clock = new THREE.Clock()
+
+function syncLookStateFromCamera() {
+  const direction = new THREE.Vector3()
+    .subVectors(controls.target, camera.position)
+    .normalize()
+  lookState.yaw = Math.atan2(direction.x, direction.z)
+  lookState.pitch = Math.asin(
+    THREE.MathUtils.clamp(direction.y, -0.999, 0.999)
+  )
 }
 
 function resetView() {
   camera.position.copy(INITIAL_CAMERA_POSITION)
   controls.target.copy(INITIAL_TARGET)
+  syncLookStateFromCamera()
   controls.update()
 }
+
+syncLookStateFromCamera()
 
 window.addEventListener('keydown', (event) => {
   if (event.code === 'KeyR') {
@@ -119,40 +158,18 @@ function setControlKey(code, pressed) {
   keyState[code] = pressed
 }
 
-function createMobileControls() {
-  if (!isCoarsePointer) {
-    return
-  }
-
-  const mobileControls = document.createElement('div')
-  mobileControls.className = 'mobile-controls'
-  mobileControls.innerHTML = `
-    <div class="mobile-move">
-      <div class="mobile-move-label">MOVE</div>
-      <div class="mobile-stick-base">
-        <div class="mobile-stick"></div>
-      </div>
-    </div>
-    <div class="mobile-vertical">
-      <button data-key="KeyE">UP</button>
-      <button data-key="KeyQ">DOWN</button>
-    </div>
-  `
-
-  const moveRoot = mobileControls.querySelector('.mobile-move')
-  const stickBase = mobileControls.querySelector('.mobile-stick-base')
-  const stick = mobileControls.querySelector('.mobile-stick')
+function bindVirtualStick({ root, base, stick, setX, setY }) {
   const maxRadius = 36
 
   const resetStick = () => {
-    touchInput.moveX = 0
-    touchInput.moveY = 0
+    setX(0)
+    setY(0)
     stick.style.transform = 'translate(-50%, -50%)'
-    moveRoot.classList.remove('is-active')
+    root.classList.remove('is-active')
   }
 
   const updateStick = (event) => {
-    const rect = stickBase.getBoundingClientRect()
+    const rect = base.getBoundingClientRect()
     const cx = rect.left + rect.width / 2
     const cy = rect.top + rect.height / 2
     const dx = event.clientX - cx
@@ -162,28 +179,87 @@ function createMobileControls() {
     const clampedX = Math.cos(angle) * distance
     const clampedY = Math.sin(angle) * distance
 
-    touchInput.moveX = clampedX / maxRadius
-    touchInput.moveY = clampedY / maxRadius
+    setX(clampedX / maxRadius)
+    setY(clampedY / maxRadius)
     stick.style.transform = `translate(calc(-50% + ${clampedX}px), calc(-50% + ${clampedY}px))`
   }
 
-  stickBase.addEventListener('pointerdown', (event) => {
+  base.addEventListener('pointerdown', (event) => {
     event.preventDefault()
-    moveRoot.classList.add('is-active')
-    stickBase.setPointerCapture(event.pointerId)
+    root.classList.add('is-active')
+    base.setPointerCapture(event.pointerId)
     updateStick(event)
   })
-  stickBase.addEventListener('pointermove', (event) => {
-    if (!moveRoot.classList.contains('is-active')) {
+  base.addEventListener('pointermove', (event) => {
+    if (!root.classList.contains('is-active')) {
       return
     }
     updateStick(event)
   })
-  stickBase.addEventListener('pointerup', (event) => {
-    stickBase.releasePointerCapture(event.pointerId)
+  base.addEventListener('pointerup', (event) => {
+    base.releasePointerCapture(event.pointerId)
     resetStick()
   })
-  stickBase.addEventListener('pointercancel', resetStick)
+  base.addEventListener('pointercancel', resetStick)
+}
+
+function createMobileControls() {
+  if (!isCoarsePointer) {
+    return
+  }
+
+  const mobileControls = document.createElement('div')
+  mobileControls.className = 'mobile-controls'
+  mobileControls.innerHTML = `
+    <div class="mobile-move">
+      <div class="mobile-stick-label">MOVE</div>
+      <div class="mobile-stick-base" data-stick="move">
+        <div class="mobile-stick"></div>
+      </div>
+    </div>
+    <div class="mobile-look-group">
+      <div class="mobile-look">
+        <div class="mobile-stick-label">LOOK</div>
+        <div class="mobile-stick-base" data-stick="look">
+          <div class="mobile-stick"></div>
+        </div>
+      </div>
+      <div class="mobile-vertical">
+        <button data-key="KeyE">UP</button>
+        <button data-key="KeyQ">DOWN</button>
+      </div>
+    </div>
+  `
+
+  const moveRoot = mobileControls.querySelector('.mobile-move')
+  const moveBase = mobileControls.querySelector('[data-stick="move"]')
+  const moveStick = moveBase.querySelector('.mobile-stick')
+  bindVirtualStick({
+    root: moveRoot,
+    base: moveBase,
+    stick: moveStick,
+    setX: (x) => {
+      touchInput.moveX = x
+    },
+    setY: (y) => {
+      touchInput.moveY = y
+    },
+  })
+
+  const lookRoot = mobileControls.querySelector('.mobile-look')
+  const lookBase = mobileControls.querySelector('[data-stick="look"]')
+  const lookStick = lookBase.querySelector('.mobile-stick')
+  bindVirtualStick({
+    root: lookRoot,
+    base: lookBase,
+    stick: lookStick,
+    setX: (x) => {
+      touchInput.lookX = x
+    },
+    setY: (y) => {
+      touchInput.lookY = y
+    },
+  })
 
   const release = (button) => {
     button.classList.remove('is-active')
@@ -200,6 +276,18 @@ function createMobileControls() {
     button.addEventListener('pointercancel', () => release(button))
     button.addEventListener('pointerleave', () => release(button))
   }
+
+  let lastTapAt = 0
+  renderer.domElement.addEventListener('pointerdown', (event) => {
+    if (!event.isPrimary) {
+      return
+    }
+    const now = Date.now()
+    if (now - lastTapAt < 280) {
+      resetView()
+    }
+    lastTapAt = now
+  })
 
   document.body.appendChild(mobileControls)
 }
@@ -234,7 +322,8 @@ async function initializeLod() {
     lodStatus.textContent = 'Loading splats...'
     await splat.initialized
 
-    if (!hasGeneratedLod(splat)) {
+    const canCreateLod = typeof splat.createLodSplats === 'function'
+    if (!hasGeneratedLod(splat) && canCreateLod) {
       lodStatus.textContent = 'Generating LoD tree in Spark...'
       await splat.createLodSplats({ quality: false })
     }
@@ -242,13 +331,15 @@ async function initializeLod() {
     if (hasGeneratedLod(splat)) {
       splat.enableLod = true
       lodStatus.textContent = 'LoD enabled'
+    } else if (!canCreateLod) {
+      lodStatus.textContent = 'LoD API unavailable in current Spark build'
     } else {
       lodStatus.textContent = 'LoD not available for this file/runtime'
     }
 
     window.setTimeout(() => {
       lodStatus.classList.add('is-hidden')
-    }, 1800)
+    }, 2200)
   } catch (error) {
     console.error('Failed to initialize LoD tree', error)
     const reason = error instanceof Error ? error.message : String(error)
@@ -264,6 +355,29 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix()
   renderer.setSize(window.innerWidth, window.innerHeight)
 })
+
+function updateLook(deltaTime) {
+  if (!isCoarsePointer) {
+    return
+  }
+
+  if (touchInput.lookX === 0 && touchInput.lookY === 0) {
+    return
+  }
+
+  lookState.yaw -= touchInput.lookX * LOOK_SPEED * deltaTime
+  lookState.pitch -= touchInput.lookY * LOOK_SPEED * deltaTime
+  lookState.pitch = THREE.MathUtils.clamp(lookState.pitch, -1.45, 1.45)
+
+  const cosPitch = Math.cos(lookState.pitch)
+  const direction = new THREE.Vector3(
+    Math.sin(lookState.yaw) * cosPitch,
+    Math.sin(lookState.pitch),
+    Math.cos(lookState.yaw) * cosPitch
+  )
+
+  controls.target.copy(camera.position).add(direction)
+}
 
 function updateMovement(deltaTime) {
   let forwardInput = -touchInput.moveY
@@ -283,7 +397,6 @@ function updateMovement(deltaTime) {
 
   movement.forward.subVectors(controls.target, camera.position)
   movement.forward.y = 0
-
   if (movement.forward.lengthSq() === 0) {
     movement.forward.set(0, 0, -1)
   } else {
@@ -303,15 +416,20 @@ function updateMovement(deltaTime) {
   }
 
   movement.delta.normalize().multiplyScalar(MOVE_SPEED * deltaTime)
-
   camera.position.add(movement.delta)
   controls.target.add(movement.delta)
 }
 
 function animate() {
   requestAnimationFrame(animate)
-  updateMovement(clock.getDelta())
-  controls.update()
+  const deltaTime = clock.getDelta()
+  updateLook(deltaTime)
+  updateMovement(deltaTime)
+  if (isCoarsePointer) {
+    camera.lookAt(controls.target)
+  } else {
+    controls.update()
+  }
   renderer.render(scene, camera)
 }
 

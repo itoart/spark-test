@@ -32,10 +32,25 @@ canvas {
   display: block;
 }
 
+.controls-toggle {
+  position: fixed;
+  top: 22px;
+  right: 22px;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(8, 8, 8, 0.82);
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  z-index: 30;
+}
+
 .controls-hint {
   position: fixed;
-  left: 50%;
-  bottom: 32px;
+  right: 22px;
+  top: 72px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -45,8 +60,13 @@ canvas {
   border-radius: 14px;
   background: rgba(8, 8, 8, 0.82);
   color: inherit;
-  transform: translateX(-50%);
   backdrop-filter: blur(10px);
+  z-index: 29;
+  transition: opacity 160ms ease;
+}
+
+.controls-hint.is-collapsed {
+  opacity: 0;
   pointer-events: none;
 }
 
@@ -102,7 +122,21 @@ canvas {
   pointer-events: auto;
 }
 
-.mobile-move-label {
+.mobile-look-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.mobile-look {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-stick-label {
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   opacity: 0.7;
@@ -134,6 +168,10 @@ canvas {
   background: rgba(255, 255, 255, 0.24);
 }
 
+.mobile-look.is-active .mobile-stick {
+  background: rgba(255, 255, 255, 0.24);
+}
+
 .mobile-vertical {
   display: grid;
   grid-template-columns: 64px;
@@ -158,10 +196,6 @@ canvas {
 
 @media (pointer: coarse) {
   .controls-hint {
-    left: auto;
-    right: 16px;
-    bottom: 160px;
     min-width: 180px;
-    transform: none;
   }
 }
