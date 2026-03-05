@@ -9,7 +9,7 @@ const MOVE_ACCEL = 12
 const MOVE_DECEL = 7
 const EXTERNAL_MOVE_DAMPING = 7
 const LOOK_INERTIA_DAMPING = 10
-const LOOK_DRAG_IMPULSE = 0.05
+const LOOK_DRAG_IMPULSE = 0.022
 const MIDDLE_DRAG_IMPULSE = 0.18
 const WHEEL_IMPULSE = 0.08
 const ENABLE_LOD = false
@@ -306,8 +306,8 @@ if (!isCoarsePointer) {
       desktopLookState.lastX = event.clientX
       desktopLookState.lastY = event.clientY
 
-      lookState.yaw -= dx * 0.0035
-      lookState.pitch -= dy * 0.0035
+      lookState.yaw -= dx * 0.0018
+      lookState.pitch -= dy * 0.0018
       lookState.pitch = THREE.MathUtils.clamp(lookState.pitch, -1.45, 1.45)
       inertiaState.lookVelocity.x += -dx * LOOK_DRAG_IMPULSE
       inertiaState.lookVelocity.y += -dy * LOOK_DRAG_IMPULSE
