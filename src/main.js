@@ -21,6 +21,7 @@ const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 
 const scene = new THREE.Scene()
+scene.background = new THREE.Color('#9ccfff')
 
 const camera = new THREE.PerspectiveCamera(
   60,
@@ -33,6 +34,7 @@ camera.position.copy(INITIAL_CAMERA_POSITION)
 const renderer = new THREE.WebGLRenderer({ antialias: false })
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
 renderer.setSize(window.innerWidth, window.innerHeight)
+renderer.setClearColor('#9ccfff', 1)
 
 document.body.innerHTML = ''
 document.body.appendChild(renderer.domElement)
@@ -75,8 +77,16 @@ controlsToggle.addEventListener('click', () => {
 
 const lodStatus = document.createElement('div')
 lodStatus.className = 'lod-status'
-lodStatus.textContent = 'Loading splats (large file)...'
+lodStatus.textContent = 'No splat loaded'
 document.body.appendChild(lodStatus)
+
+const loadingOverlay = document.createElement('div')
+loadingOverlay.className = 'loading-overlay'
+loadingOverlay.innerHTML = `
+  <div class="loading-spinner" aria-hidden="true"></div>
+  <div class="loading-text">Loading splat...</div>
+`
+document.body.appendChild(loadingOverlay)
 
 const controls = new OrbitControls(camera, renderer.domElement)
 controls.enableDamping = true
@@ -359,16 +369,7 @@ const spark = new SparkRenderer({
 })
 scene.add(spark)
 
-const splat = new SplatMesh({
-  url: `${import.meta.env.BASE_URL}splat_100000.splat`,
-  lod: ENABLE_LOD,
-  nonLod: true,
-  enableLod: false,
-  behindFoveate: 1.0,
-})
-splat.rotation.x = Math.PI
-scene.add(splat)
-let activeSplat = splat
+let activeSplat = null
 
 function inferFileType(fileName) {
   const lower = fileName.toLowerCase()
@@ -384,6 +385,11 @@ function inferFileType(fileName) {
 }
 
 async function loadLocalSplat(file) {
+  const loadingText = loadingOverlay.querySelector('.loading-text')
+  if (loadingText) {
+    loadingText.textContent = `Loading ${file.name}...`
+  }
+  loadingOverlay.classList.add('is-active')
   lodStatus.classList.remove('is-hidden')
   lodStatus.textContent = `Loading local file: ${file.name}`
 
@@ -404,15 +410,23 @@ async function loadLocalSplat(file) {
 
     const prevSplat = activeSplat
     activeSplat = nextSplat
-    scene.remove(prevSplat)
-    prevSplat.dispose()
+    if (prevSplat) {
+      scene.remove(prevSplat)
+      prevSplat.dispose()
+    }
 
     await initializeLod(activeSplat)
     resetView()
+    lodStatus.textContent = `Loaded: ${file.name}`
+    window.setTimeout(() => {
+      lodStatus.classList.add('is-hidden')
+    }, 1400)
   } catch (error) {
     console.error('Failed to load local splat', error)
     const reason = error instanceof Error ? error.message : String(error)
     lodStatus.textContent = `Local file load failed: ${reason.slice(0, 64)}`
+  } finally {
+    loadingOverlay.classList.remove('is-active')
   }
 }
 
@@ -444,12 +458,14 @@ function initializeLodRamp() {
 }
 
 async function initializeLod(targetSplat = activeSplat) {
+  if (!targetSplat) {
+    lodStatus.textContent = 'No splat loaded'
+    return
+  }
+
   if (!ENABLE_LOD) {
     targetSplat.enableLod = false
-    lodStatus.textContent = 'LoD disabled for testing'
-    window.setTimeout(() => {
-      lodStatus.classList.add('is-hidden')
-    }, 1500)
+    lodStatus.textContent = 'LoD disabled'
     return
   }
 
@@ -483,8 +499,6 @@ async function initializeLod(targetSplat = activeSplat) {
     targetSplat.enableLod = false
   }
 }
-
-initializeLod()
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight
@@ -560,7 +574,7 @@ function updateMovement(deltaTime) {
 }
 
 function updateAdaptiveLod(deltaTime) {
-  if (!lodRampState.active) {
+  if (!lodRampState.active || !activeSplat) {
     return
   }
 
