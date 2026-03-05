@@ -4,6 +4,7 @@ import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const MOVE_SPEED = 10
+const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 0, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 0, 0)
 
@@ -28,9 +29,9 @@ const overlay = document.createElement('div')
 overlay.className = 'controls-hint'
 overlay.innerHTML = `
   <strong>Controls</strong>
-  <span>Left drag: Orbit</span>
-  <span>Wheel: Zoom</span>
-  <span>Right drag or Shift+Left drag: Pan</span>
+  <span>${isCoarsePointer ? 'One finger: Orbit' : 'Left drag: Orbit'}</span>
+  <span>${isCoarsePointer ? 'Two fingers: Pan/Zoom' : 'Wheel: Zoom'}</span>
+  <span>${isCoarsePointer ? 'Use on-screen pad: Move' : 'Right drag or Shift+Left drag: Pan'}</span>
   <span>W/A/S/D: Move</span>
   <span>Q/E: Move down/up</span>
   <span>R: Reset</span>
@@ -70,6 +71,10 @@ const movement = {
 }
 
 const clock = new THREE.Clock()
+const touchInput = {
+  moveX: 0,
+  moveY: 0,
+}
 
 function resetView() {
   camera.position.copy(INITIAL_CAMERA_POSITION)
@@ -107,40 +112,148 @@ window.addEventListener('blur', () => {
   }
 })
 
+function setControlKey(code, pressed) {
+  if (!(code in keyState)) {
+    return
+  }
+  keyState[code] = pressed
+}
+
+function createMobileControls() {
+  if (!isCoarsePointer) {
+    return
+  }
+
+  const mobileControls = document.createElement('div')
+  mobileControls.className = 'mobile-controls'
+  mobileControls.innerHTML = `
+    <div class="mobile-move">
+      <div class="mobile-move-label">MOVE</div>
+      <div class="mobile-stick-base">
+        <div class="mobile-stick"></div>
+      </div>
+    </div>
+    <div class="mobile-vertical">
+      <button data-key="KeyE">UP</button>
+      <button data-key="KeyQ">DOWN</button>
+    </div>
+  `
+
+  const moveRoot = mobileControls.querySelector('.mobile-move')
+  const stickBase = mobileControls.querySelector('.mobile-stick-base')
+  const stick = mobileControls.querySelector('.mobile-stick')
+  const maxRadius = 36
+
+  const resetStick = () => {
+    touchInput.moveX = 0
+    touchInput.moveY = 0
+    stick.style.transform = 'translate(-50%, -50%)'
+    moveRoot.classList.remove('is-active')
+  }
+
+  const updateStick = (event) => {
+    const rect = stickBase.getBoundingClientRect()
+    const cx = rect.left + rect.width / 2
+    const cy = rect.top + rect.height / 2
+    const dx = event.clientX - cx
+    const dy = event.clientY - cy
+    const distance = Math.min(maxRadius, Math.hypot(dx, dy))
+    const angle = Math.atan2(dy, dx)
+    const clampedX = Math.cos(angle) * distance
+    const clampedY = Math.sin(angle) * distance
+
+    touchInput.moveX = clampedX / maxRadius
+    touchInput.moveY = clampedY / maxRadius
+    stick.style.transform = `translate(calc(-50% + ${clampedX}px), calc(-50% + ${clampedY}px))`
+  }
+
+  stickBase.addEventListener('pointerdown', (event) => {
+    event.preventDefault()
+    moveRoot.classList.add('is-active')
+    stickBase.setPointerCapture(event.pointerId)
+    updateStick(event)
+  })
+  stickBase.addEventListener('pointermove', (event) => {
+    if (!moveRoot.classList.contains('is-active')) {
+      return
+    }
+    updateStick(event)
+  })
+  stickBase.addEventListener('pointerup', (event) => {
+    stickBase.releasePointerCapture(event.pointerId)
+    resetStick()
+  })
+  stickBase.addEventListener('pointercancel', resetStick)
+
+  const release = (button) => {
+    button.classList.remove('is-active')
+    setControlKey(button.dataset.key, false)
+  }
+
+  for (const button of mobileControls.querySelectorAll('button[data-key]')) {
+    button.addEventListener('pointerdown', (event) => {
+      event.preventDefault()
+      button.classList.add('is-active')
+      setControlKey(button.dataset.key, true)
+    })
+    button.addEventListener('pointerup', () => release(button))
+    button.addEventListener('pointercancel', () => release(button))
+    button.addEventListener('pointerleave', () => release(button))
+  }
+
+  document.body.appendChild(mobileControls)
+}
+
+createMobileControls()
+
 const spark = new SparkRenderer({
   renderer,
   enableLod: true,
-  lodSplatScale: 1.5,
+  lodSplatScale: isCoarsePointer ? 0.9 : 1.5,
   behindFoveate: 0.2,
-  numLodFetchers: 4,
+  numLodFetchers: isCoarsePointer ? 2 : 4,
 })
 scene.add(spark)
 
 const splat = new SplatMesh({
   url: `${import.meta.env.BASE_URL}splat_100000.splat`,
+  lod: true,
+  nonLod: true,
   enableLod: false,
   behindFoveate: 0.2,
 })
 splat.rotation.x = Math.PI
 scene.add(splat)
 
+function hasGeneratedLod(mesh) {
+  return Boolean(mesh.packedSplats?.lodSplats || mesh.extSplats?.lodSplats)
+}
+
 async function initializeLod() {
   try {
     lodStatus.textContent = 'Loading splats...'
     await splat.initialized
 
-    lodStatus.textContent = 'Generating LoD tree in Spark...'
-    await splat.createLodSplats({ quality: false })
+    if (!hasGeneratedLod(splat)) {
+      lodStatus.textContent = 'Generating LoD tree in Spark...'
+      await splat.createLodSplats({ quality: false })
+    }
 
-    splat.enableLod = true
-    lodStatus.textContent = 'LoD enabled'
+    if (hasGeneratedLod(splat)) {
+      splat.enableLod = true
+      lodStatus.textContent = 'LoD enabled'
+    } else {
+      lodStatus.textContent = 'LoD not available for this file/runtime'
+    }
 
     window.setTimeout(() => {
       lodStatus.classList.add('is-hidden')
     }, 1800)
   } catch (error) {
     console.error('Failed to initialize LoD tree', error)
-    lodStatus.textContent = 'LoD generation failed'
+    const reason = error instanceof Error ? error.message : String(error)
+    lodStatus.textContent = `LoD disabled: ${reason.slice(0, 64)}`
+    splat.enableLod = false
   }
 }
 
@@ -153,8 +266,8 @@ window.addEventListener('resize', () => {
 })
 
 function updateMovement(deltaTime) {
-  let forwardInput = 0
-  let rightInput = 0
+  let forwardInput = -touchInput.moveY
+  let rightInput = touchInput.moveX
   let verticalInput = 0
 
   if (keyState.KeyW) forwardInput += 1
