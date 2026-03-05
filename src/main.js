@@ -43,9 +43,9 @@ function createSkyDome() {
     depthWrite: false,
     depthTest: false,
     uniforms: {
-      topColor: { value: new THREE.Color('#1fa3f7') },
-      skyColor: { value: new THREE.Color('#b9dbf7') },
-      horizonColor: { value: new THREE.Color('#e3e3e3') },
+      topColor: { value: new THREE.Color('#49b8ff') },
+      skyColor: { value: new THREE.Color('#dff0ff') },
+      horizonColor: { value: new THREE.Color('#ffffff') },
       lowColor: { value: new THREE.Color('#6f6f6f') },
       bottomColor: { value: new THREE.Color('#000000') },
     },
@@ -70,9 +70,9 @@ function createSkyDome() {
         // Gradient keys: black -> gray -> light horizon -> sky blue.
         vec3 color = bottomColor;
         color = mix(color, lowColor, smoothstep(0.08, 0.34, t));
-        color = mix(color, horizonColor, smoothstep(0.34, 0.54, t));
-        color = mix(color, skyColor, smoothstep(0.54, 0.76, t));
-        color = mix(color, topColor, smoothstep(0.76, 1.00, t));
+        color = mix(color, horizonColor, smoothstep(0.34, 0.52, t));
+        color = mix(color, skyColor, smoothstep(0.52, 0.72, t));
+        color = mix(color, topColor, smoothstep(0.72, 1.00, t));
         gl_FragColor = vec4(color, 1.0);
       }
     `,
