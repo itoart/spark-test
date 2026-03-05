@@ -183,7 +183,7 @@ canvas {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  transform: translateY(-62px);
+  transform: none;
 }
 
 .mobile-look {
@@ -234,6 +234,7 @@ canvas {
   grid-template-columns: 132px;
   gap: 8px;
   margin-right: 0;
+  margin-bottom: 6px;
   pointer-events: auto;
 }
 
@@ -277,9 +278,10 @@ canvas {
   .mobile-vertical {
     grid-template-columns: 112px;
     margin-right: 0;
+    margin-bottom: 4px;
   }
 
   .mobile-look-stack {
-    transform: translateY(-52px);
+    transform: none;
   }
 }
