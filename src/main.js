@@ -6,7 +6,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 const MOVE_SPEED = 10
 const LOOK_SPEED = 1.1
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
-const LOD_SCALE_COARSE = isCoarsePointer ? 0.85 : 1.0
+const LOD_SCALE_COARSE = isCoarsePointer ? 1.0 : 1.2
 const LOD_SCALE_FINE = isCoarsePointer ? 2.0 : 2.6
 const LOD_RAMP_SECONDS = 1.8
 const LOD_MOTION_THRESHOLD = 0.22
@@ -441,7 +441,7 @@ function updateMovement(deltaTime) {
 }
 
 function updateAdaptiveLod(deltaTime) {
-  if (!lodRampState.active || !splat.enableLod) {
+  if (!lodRampState.active) {
     return
   }
 
@@ -451,20 +451,24 @@ function updateAdaptiveLod(deltaTime) {
 
   if (motion > LOD_MOTION_THRESHOLD) {
     lodRampState.settleTime = 0
+    spark.lodSplatScale = THREE.MathUtils.lerp(
+      spark.lodSplatScale,
+      LOD_SCALE_COARSE,
+      0.35
+    )
   } else {
     lodRampState.settleTime = Math.min(
       LOD_RAMP_SECONDS,
       lodRampState.settleTime + deltaTime
     )
+    const t = lodRampState.settleTime / LOD_RAMP_SECONDS
+    const targetScale = THREE.MathUtils.lerp(LOD_SCALE_COARSE, LOD_SCALE_FINE, t)
+    spark.lodSplatScale = THREE.MathUtils.lerp(
+      spark.lodSplatScale,
+      targetScale,
+      0.12
+    )
   }
-
-  const t = lodRampState.settleTime / LOD_RAMP_SECONDS
-  const targetScale = THREE.MathUtils.lerp(LOD_SCALE_COARSE, LOD_SCALE_FINE, t)
-  spark.lodSplatScale = THREE.MathUtils.lerp(
-    spark.lodSplatScale,
-    targetScale,
-    0.12
-  )
 
   lodRampState.lastPos.copy(camera.position)
   lodRampState.lastQuat.copy(camera.quaternion)
