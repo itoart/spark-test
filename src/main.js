@@ -1,6 +1,6 @@
 import './style.css'
 import * as THREE from 'three'
-import { SparkRenderer, SplatMesh, SplatFileType } from '@sparkjsdev/spark'
+import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const MOVE_SPEED = 10
@@ -371,19 +371,6 @@ scene.add(spark)
 
 let activeSplat = null
 
-function inferFileType(fileName) {
-  const lower = fileName.toLowerCase()
-  if (lower.endsWith('.ply')) return SplatFileType.PLY
-  if (lower.endsWith('.spz')) return SplatFileType.SPZ
-  if (lower.endsWith('.splat')) return SplatFileType.SPLAT
-  if (lower.endsWith('.ksplat')) return SplatFileType.KSPLAT
-  if (lower.endsWith('.sog') || lower.endsWith('.sogs') || lower.endsWith('.json')) {
-    return SplatFileType.PCSOGS
-  }
-  if (lower.endsWith('.zip')) return SplatFileType.PCSOGSZIP
-  return undefined
-}
-
 async function loadLocalSplat(file) {
   const loadingText = loadingOverlay.querySelector('.loading-text')
   if (loadingText) {
@@ -398,7 +385,6 @@ async function loadLocalSplat(file) {
     const nextSplat = new SplatMesh({
       fileBytes,
       fileName: file.name,
-      fileType: inferFileType(file.name),
       lod: ENABLE_LOD,
       nonLod: true,
       enableLod: false,
