@@ -15,11 +15,12 @@ const LOOK_DRAG_IMPULSE = 0.022
 const MIDDLE_DRAG_IMPULSE = 0.18
 const WHEEL_IMPULSE = 0.08
 const ENABLE_LOD = false
+const MOBILE_TARGET_FPS = 30
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
 const cpuCores = navigator.hardwareConcurrency ?? 4
 const deviceMemoryGb = navigator.deviceMemory ?? 4
 const isLowEndDevice = isCoarsePointer || cpuCores <= 6 || deviceMemoryGb <= 4
-const MAX_PIXEL_RATIO = isCoarsePointer ? 1.0 : isLowEndDevice ? 1.15 : 1.5
+const MAX_PIXEL_RATIO = isCoarsePointer ? 0.75 : isLowEndDevice ? 1.15 : 1.5
 const LOD_SCALE_COARSE = isCoarsePointer ? 1.2 : 0.9
 const LOD_SCALE_FINE = isCoarsePointer ? 2.0 : 2.6
 const LOD_RAMP_SECONDS = 2.2
@@ -236,6 +237,7 @@ const lodRampState = {
 }
 
 const clock = new THREE.Clock()
+let lastFrameTimeSeconds = 0
 
 function syncLookStateFromCamera() {
   const direction = new THREE.Vector3()
@@ -1045,9 +1047,18 @@ function updateAdaptiveLod(deltaTime) {
   lodRampState.lastQuat.copy(camera.quaternion)
 }
 
-function animate() {
+function animate(timestampMs = 0) {
   requestAnimationFrame(animate)
-  const deltaTime = clock.getDelta()
+  const frameTimeSeconds = timestampMs * 0.001
+  if (
+    isCoarsePointer &&
+    frameTimeSeconds - lastFrameTimeSeconds < 1 / MOBILE_TARGET_FPS
+  ) {
+    return
+  }
+
+  lastFrameTimeSeconds = frameTimeSeconds
+  const deltaTime = Math.min(clock.getDelta(), 0.05)
   skyDome.position.copy(camera.position)
   updateLook(deltaTime)
   updateMovement(deltaTime)
