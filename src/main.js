@@ -43,9 +43,10 @@ function createSkyDome() {
     depthWrite: false,
     depthTest: false,
     uniforms: {
-      topColor: { value: new THREE.Color('#c8e6ff') },
-      midColor: { value: new THREE.Color('#e4f2ff') },
-      horizonColor: { value: new THREE.Color('#ffffff') },
+      topColor: { value: new THREE.Color('#1fa3f7') },
+      skyColor: { value: new THREE.Color('#b9dbf7') },
+      horizonColor: { value: new THREE.Color('#e3e3e3') },
+      lowColor: { value: new THREE.Color('#6f6f6f') },
       bottomColor: { value: new THREE.Color('#000000') },
     },
     vertexShader: `
@@ -59,26 +60,19 @@ function createSkyDome() {
     fragmentShader: `
       varying vec3 vWorldDir;
       uniform vec3 topColor;
-      uniform vec3 midColor;
+      uniform vec3 skyColor;
       uniform vec3 horizonColor;
+      uniform vec3 lowColor;
       uniform vec3 bottomColor;
 
       void main() {
         float t = clamp(vWorldDir.y * 0.5 + 0.5, 0.0, 1.0);
-
-        // Upper hemisphere: white-ish blue at horizon -> richer blue toward zenith.
-        float skyTop = smoothstep(0.62, 1.0, t);
-        vec3 upperColor = mix(midColor, topColor, skyTop);
-
-        // Lower hemisphere: white near horizon -> black toward nadir.
-        float groundRise = smoothstep(0.0, 0.45, t);
-        vec3 lowerColor = mix(bottomColor, horizonColor, groundRise);
-
-        vec3 base = mix(lowerColor, upperColor, step(0.5, t));
-
-        // Thin bright horizon band on top of the base gradient.
-        float horizonBand = exp(-pow((t - 0.5) / 0.035, 2.0));
-        vec3 color = mix(base, horizonColor, horizonBand * 0.78);
+        // Gradient keys: black -> gray -> light horizon -> sky blue.
+        vec3 color = bottomColor;
+        color = mix(color, lowColor, smoothstep(0.08, 0.34, t));
+        color = mix(color, horizonColor, smoothstep(0.34, 0.54, t));
+        color = mix(color, skyColor, smoothstep(0.54, 0.76, t));
+        color = mix(color, topColor, smoothstep(0.76, 1.00, t));
         gl_FragColor = vec4(color, 1.0);
       }
     `,
