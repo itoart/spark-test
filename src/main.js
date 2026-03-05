@@ -5,6 +5,13 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const MOVE_SPEED = 5
 const LOOK_SPEED = 1.1
+const MOVE_ACCEL = 12
+const MOVE_DECEL = 7
+const EXTERNAL_MOVE_DAMPING = 7
+const LOOK_INERTIA_DAMPING = 10
+const LOOK_DRAG_IMPULSE = 0.05
+const MIDDLE_DRAG_IMPULSE = 0.18
+const WHEEL_IMPULSE = 0.08
 const ENABLE_LOD = false
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
 const cpuCores = navigator.hardwareConcurrency ?? 4
@@ -195,6 +202,11 @@ const desktopStrafeState = {
   lastX: 0,
   lastY: 0,
 }
+const inertiaState = {
+  moveInput: new THREE.Vector3(),
+  externalVelocity: new THREE.Vector3(),
+  lookVelocity: new THREE.Vector2(),
+}
 
 const lookState = {
   yaw: 0,
@@ -236,6 +248,10 @@ function applyLookDirection() {
 function translateCameraAndTarget(offset) {
   camera.position.add(offset)
   controls.target.add(offset)
+}
+
+function expDamp(value, damping, deltaTime) {
+  return value * Math.exp(-damping * deltaTime)
 }
 
 function resetView() {
@@ -293,6 +309,8 @@ if (!isCoarsePointer) {
       lookState.yaw -= dx * 0.0035
       lookState.pitch -= dy * 0.0035
       lookState.pitch = THREE.MathUtils.clamp(lookState.pitch, -1.45, 1.45)
+      inertiaState.lookVelocity.x += -dx * LOOK_DRAG_IMPULSE
+      inertiaState.lookVelocity.y += -dy * LOOK_DRAG_IMPULSE
       applyLookDirection()
       requestCoarseLod()
       event.preventDefault()
@@ -317,9 +335,14 @@ if (!isCoarsePointer) {
         movement.right.normalize()
       }
       movement.up.copy(camera.up).normalize()
-      movement.delta.copy(movement.right).multiplyScalar(-dx * 0.015)
-      movement.delta.addScaledVector(movement.up, dy * 0.015)
-      translateCameraAndTarget(movement.delta)
+      inertiaState.externalVelocity.addScaledVector(
+        movement.right,
+        -dx * MIDDLE_DRAG_IMPULSE
+      )
+      inertiaState.externalVelocity.addScaledVector(
+        movement.up,
+        dy * MIDDLE_DRAG_IMPULSE
+      )
       requestCoarseLod()
       event.preventDefault()
     }
@@ -350,8 +373,10 @@ if (!isCoarsePointer) {
       } else {
         movement.forward.normalize()
       }
-      movement.delta.copy(movement.forward).multiplyScalar(-event.deltaY * 0.01)
-      translateCameraAndTarget(movement.delta)
+      inertiaState.externalVelocity.addScaledVector(
+        movement.forward,
+        -event.deltaY * WHEEL_IMPULSE
+      )
       requestCoarseLod()
       event.preventDefault()
     },
@@ -683,20 +708,42 @@ window.addEventListener('resize', () => {
 })
 
 function updateLook(deltaTime) {
-  if (!isCoarsePointer) {
+  if (isCoarsePointer) {
+    if (touchInput.lookX === 0 && touchInput.lookY === 0) {
+      return
+    }
+    requestCoarseLod()
+
+    lookState.yaw -= touchInput.lookX * LOOK_SPEED * deltaTime
+    lookState.pitch -= touchInput.lookY * LOOK_SPEED * deltaTime
+    lookState.pitch = THREE.MathUtils.clamp(lookState.pitch, -1.45, 1.45)
+    applyLookDirection()
     return
   }
 
-  if (touchInput.lookX === 0 && touchInput.lookY === 0) {
+  if (inertiaState.lookVelocity.lengthSq() < 1e-6) {
+    inertiaState.lookVelocity.set(0, 0)
     return
   }
-  requestCoarseLod()
 
-  lookState.yaw -= touchInput.lookX * LOOK_SPEED * deltaTime
-  lookState.pitch -= touchInput.lookY * LOOK_SPEED * deltaTime
-  lookState.pitch = THREE.MathUtils.clamp(lookState.pitch, -1.45, 1.45)
-
+  lookState.yaw += inertiaState.lookVelocity.x * deltaTime
+  lookState.pitch += inertiaState.lookVelocity.y * deltaTime
+  if (lookState.pitch > 1.45 || lookState.pitch < -1.45) {
+    lookState.pitch = THREE.MathUtils.clamp(lookState.pitch, -1.45, 1.45)
+    inertiaState.lookVelocity.y = 0
+  }
   applyLookDirection()
+  inertiaState.lookVelocity.x = expDamp(
+    inertiaState.lookVelocity.x,
+    LOOK_INERTIA_DAMPING,
+    deltaTime
+  )
+  inertiaState.lookVelocity.y = expDamp(
+    inertiaState.lookVelocity.y,
+    LOOK_INERTIA_DAMPING,
+    deltaTime
+  )
+  requestCoarseLod()
 }
 
 function updateMovement(deltaTime) {
@@ -711,10 +758,7 @@ function updateMovement(deltaTime) {
   if (keyState.KeyE) verticalInput += 1
   if (keyState.KeyQ) verticalInput -= 1
 
-  if (forwardInput === 0 && rightInput === 0 && verticalInput === 0) {
-    return
-  }
-  requestCoarseLod()
+  const hasDirectInput = forwardInput !== 0 || rightInput !== 0 || verticalInput !== 0
 
   movement.forward.subVectors(controls.target, camera.position)
   if (movement.forward.lengthSq() < 1e-8) {
@@ -731,17 +775,56 @@ function updateMovement(deltaTime) {
   }
   movement.up.copy(camera.up).normalize()
 
-  movement.delta.set(0, 0, 0)
-  movement.delta.addScaledVector(movement.forward, forwardInput)
-  movement.delta.addScaledVector(movement.right, rightInput)
-  movement.delta.addScaledVector(movement.up, verticalInput)
-
-  if (movement.delta.lengthSq() === 0) {
-    return
+  const inputLength = Math.hypot(forwardInput, rightInput, verticalInput)
+  if (inputLength > 1) {
+    forwardInput /= inputLength
+    rightInput /= inputLength
+    verticalInput /= inputLength
   }
 
-  movement.delta.normalize().multiplyScalar(MOVE_SPEED * deltaTime)
-  translateCameraAndTarget(movement.delta)
+  const blend = 1 - Math.exp(-(hasDirectInput ? MOVE_ACCEL : MOVE_DECEL) * deltaTime)
+  inertiaState.moveInput.x = THREE.MathUtils.lerp(
+    inertiaState.moveInput.x,
+    rightInput,
+    blend
+  )
+  inertiaState.moveInput.y = THREE.MathUtils.lerp(
+    inertiaState.moveInput.y,
+    verticalInput,
+    blend
+  )
+  inertiaState.moveInput.z = THREE.MathUtils.lerp(
+    inertiaState.moveInput.z,
+    forwardInput,
+    blend
+  )
+
+  movement.delta.set(0, 0, 0)
+  movement.delta.addScaledVector(
+    movement.forward,
+    inertiaState.moveInput.z * MOVE_SPEED * deltaTime
+  )
+  movement.delta.addScaledVector(
+    movement.right,
+    inertiaState.moveInput.x * MOVE_SPEED * deltaTime
+  )
+  movement.delta.addScaledVector(
+    movement.up,
+    inertiaState.moveInput.y * MOVE_SPEED * deltaTime
+  )
+  movement.delta.addScaledVector(inertiaState.externalVelocity, deltaTime)
+
+  if (movement.delta.lengthSq() > 1e-10) {
+    translateCameraAndTarget(movement.delta)
+    requestCoarseLod()
+  }
+
+  inertiaState.externalVelocity.multiplyScalar(
+    Math.exp(-EXTERNAL_MOVE_DAMPING * deltaTime)
+  )
+  if (inertiaState.externalVelocity.lengthSq() < 1e-6) {
+    inertiaState.externalVelocity.set(0, 0, 0)
+  }
 }
 
 function updateAdaptiveLod(deltaTime) {
