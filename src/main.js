@@ -7,6 +7,10 @@ const MOVE_SPEED = 10
 const LOOK_SPEED = 1.1
 const ENABLE_LOD = false
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
+const cpuCores = navigator.hardwareConcurrency ?? 4
+const deviceMemoryGb = navigator.deviceMemory ?? 4
+const isLowEndDevice = isCoarsePointer || cpuCores <= 6 || deviceMemoryGb <= 4
+const MAX_PIXEL_RATIO = isCoarsePointer ? 1.0 : isLowEndDevice ? 1.15 : 1.5
 const LOD_SCALE_COARSE = isCoarsePointer ? 1.2 : 0.9
 const LOD_SCALE_FINE = isCoarsePointer ? 2.0 : 2.6
 const LOD_RAMP_SECONDS = 2.2
@@ -27,7 +31,7 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.copy(INITIAL_CAMERA_POSITION)
 
 const renderer = new THREE.WebGLRenderer({ antialias: false })
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
 renderer.setSize(window.innerWidth, window.innerHeight)
 
 document.body.innerHTML = ''
@@ -64,7 +68,7 @@ controlsToggle.addEventListener('click', () => {
 
 const lodStatus = document.createElement('div')
 lodStatus.className = 'lod-status'
-lodStatus.textContent = 'Loading splats...'
+lodStatus.textContent = 'Loading splats (large file)...'
 document.body.appendChild(lodStatus)
 
 const controls = new OrbitControls(camera, renderer.domElement)
@@ -337,6 +341,11 @@ createMobileControls()
 const spark = new SparkRenderer({
   renderer,
   enableLod: ENABLE_LOD,
+  maxStdDev: Math.sqrt(isCoarsePointer ? 4 : 5),
+  maxPixelRadius: isCoarsePointer ? 160 : 256,
+  minPixelRadius: isCoarsePointer ? 0.6 : 0.4,
+  minAlpha: isCoarsePointer ? 0.01 : 0.006,
+  minSortIntervalMs: isLowEndDevice ? 24 : 12,
   lodSplatScale: LOD_SCALE_COARSE,
   behindFoveate: 1.0,
   numLodFetchers: isCoarsePointer ? 2 : 4,
@@ -412,6 +421,7 @@ initializeLod()
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
   renderer.setSize(window.innerWidth, window.innerHeight)
 })
 
