@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const MOVE_SPEED = 10
 const LOOK_SPEED = 1.1
+const ENABLE_LOD = false
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
 const LOD_SCALE_COARSE = isCoarsePointer ? 1.2 : 0.9
 const LOD_SCALE_FINE = isCoarsePointer ? 2.0 : 2.6
@@ -335,7 +336,7 @@ createMobileControls()
 
 const spark = new SparkRenderer({
   renderer,
-  enableLod: true,
+  enableLod: ENABLE_LOD,
   lodSplatScale: LOD_SCALE_COARSE,
   behindFoveate: 1.0,
   numLodFetchers: isCoarsePointer ? 2 : 4,
@@ -344,7 +345,7 @@ scene.add(spark)
 
 const splat = new SplatMesh({
   url: `${import.meta.env.BASE_URL}splat_100000.splat`,
-  lod: true,
+  lod: ENABLE_LOD,
   nonLod: true,
   enableLod: false,
   behindFoveate: 1.0,
@@ -366,6 +367,15 @@ function initializeLodRamp() {
 }
 
 async function initializeLod() {
+  if (!ENABLE_LOD) {
+    splat.enableLod = false
+    lodStatus.textContent = 'LoD disabled for testing'
+    window.setTimeout(() => {
+      lodStatus.classList.add('is-hidden')
+    }, 1500)
+    return
+  }
+
   try {
     lodStatus.textContent = 'Loading splats...'
     await splat.initialized
