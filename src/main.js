@@ -297,8 +297,8 @@ createMobileControls()
 const spark = new SparkRenderer({
   renderer,
   enableLod: true,
-  lodSplatScale: isCoarsePointer ? 0.9 : 1.5,
-  behindFoveate: 0.2,
+  lodSplatScale: isCoarsePointer ? 2.0 : 2.6,
+  behindFoveate: 1.0,
   numLodFetchers: isCoarsePointer ? 2 : 4,
 })
 scene.add(spark)
@@ -308,7 +308,7 @@ const splat = new SplatMesh({
   lod: true,
   nonLod: true,
   enableLod: false,
-  behindFoveate: 0.2,
+  behindFoveate: 1.0,
 })
 splat.rotation.x = Math.PI
 scene.add(splat)
@@ -325,7 +325,7 @@ async function initializeLod() {
     const canCreateLod = typeof splat.createLodSplats === 'function'
     if (!hasGeneratedLod(splat) && canCreateLod) {
       lodStatus.textContent = 'Generating LoD tree in Spark...'
-      await splat.createLodSplats({ quality: false })
+      await splat.createLodSplats({ quality: true })
     }
 
     if (hasGeneratedLod(splat)) {
