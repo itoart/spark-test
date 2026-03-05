@@ -112,7 +112,7 @@ overlay.innerHTML = `
   <span>${isCoarsePointer ? 'Left pad: Move' : 'Left drag: Orbit'}</span>
   <span>${isCoarsePointer ? 'Right pad: Look around' : 'Right drag: Look around'}</span>
   <span>${isCoarsePointer ? 'UP/DOWN: Vertical move' : 'Wheel: Forward/Back'}</span>
-  <span>${isCoarsePointer ? 'Double tap: Reset view' : 'Middle drag: Left/Right move'}</span>
+  <span>${isCoarsePointer ? 'Double tap: Reset view' : 'Middle drag: Left/Right + Up/Down'}</span>
   <span>${isCoarsePointer ? 'Double tap: Reset view' : 'W/A/S/D: Move'}</span>
   <span>${isCoarsePointer ? 'Q/E keys also work' : 'Q/E: Move down/up'}</span>
   <span>R: Reset</span>
@@ -193,6 +193,7 @@ const desktopStrafeState = {
   dragging: false,
   pointerId: null,
   lastX: 0,
+  lastY: 0,
 }
 
 const lookState = {
@@ -274,6 +275,7 @@ if (!isCoarsePointer) {
       desktopStrafeState.dragging = true
       desktopStrafeState.pointerId = event.pointerId
       desktopStrafeState.lastX = event.clientX
+      desktopStrafeState.lastY = event.clientY
       renderer.domElement.setPointerCapture(event.pointerId)
       requestCoarseLod()
       event.preventDefault()
@@ -298,7 +300,9 @@ if (!isCoarsePointer) {
 
     if (desktopStrafeState.dragging && event.pointerId === desktopStrafeState.pointerId) {
       const dx = event.clientX - desktopStrafeState.lastX
+      const dy = event.clientY - desktopStrafeState.lastY
       desktopStrafeState.lastX = event.clientX
+      desktopStrafeState.lastY = event.clientY
 
       movement.forward.subVectors(controls.target, camera.position)
       if (movement.forward.lengthSq() < 1e-8) {
@@ -312,7 +316,9 @@ if (!isCoarsePointer) {
       } else {
         movement.right.normalize()
       }
+      movement.up.copy(camera.up).normalize()
       movement.delta.copy(movement.right).multiplyScalar(dx * 0.015)
+      movement.delta.addScaledVector(movement.up, -dy * 0.015)
       translateCameraAndTarget(movement.delta)
       requestCoarseLod()
       event.preventDefault()
