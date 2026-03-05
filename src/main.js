@@ -109,9 +109,10 @@ overlay.className = 'controls-hint is-collapsed'
 overlay.innerHTML = `
   <strong>Controls</strong>
   <button class="menu-load-btn" type="button">Load Splat</button>
-  <span>${isCoarsePointer ? 'Left pad: Move' : 'Left drag: Look around'}</span>
-  <span>${isCoarsePointer ? 'Right pad: Look around' : 'Right drag: Orbit'}</span>
-  <span>${isCoarsePointer ? 'UP/DOWN: Vertical move' : 'Wheel: Zoom (FOV only)'}</span>
+  <span>${isCoarsePointer ? 'Left pad: Move' : 'Left drag: Orbit'}</span>
+  <span>${isCoarsePointer ? 'Right pad: Look around' : 'Right drag: Look around'}</span>
+  <span>${isCoarsePointer ? 'UP/DOWN: Vertical move' : 'Wheel: Forward/Back'}</span>
+  <span>${isCoarsePointer ? 'Double tap: Reset view' : 'Middle drag: Left/Right move'}</span>
   <span>${isCoarsePointer ? 'Double tap: Reset view' : 'W/A/S/D: Move'}</span>
   <span>${isCoarsePointer ? 'Q/E keys also work' : 'Q/E: Move down/up'}</span>
   <span>R: Reset</span>
@@ -148,8 +149,9 @@ controls.enablePan = false
 controls.enableZoom = false
 controls.minDistance = ORBIT_RADIUS
 controls.maxDistance = ORBIT_RADIUS
-controls.mouseButtons.LEFT = THREE.MOUSE.NONE
-controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE
+controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE
+controls.mouseButtons.RIGHT = THREE.MOUSE.NONE
+controls.mouseButtons.MIDDLE = THREE.MOUSE.NONE
 controls.target.copy(INITIAL_TARGET)
 controls.enabled = !isCoarsePointer
 controls.update()
@@ -186,6 +188,11 @@ const desktopLookState = {
   pointerId: null,
   lastX: 0,
   lastY: 0,
+}
+const desktopStrafeState = {
+  dragging: false,
+  pointerId: null,
+  lastX: 0,
 }
 
 const lookState = {
@@ -225,6 +232,11 @@ function applyLookDirection() {
   controls.target.copy(camera.position).addScaledVector(direction, ORBIT_RADIUS)
 }
 
+function translateCameraAndTarget(offset) {
+  camera.position.add(offset)
+  controls.target.add(offset)
+}
+
 function resetView() {
   camera.position.copy(INITIAL_CAMERA_POSITION)
   controls.target.copy(INITIAL_TARGET)
@@ -247,43 +259,77 @@ syncLookStateFromCamera()
 
 if (!isCoarsePointer) {
   renderer.domElement.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0) {
+    if (event.button === 2) {
+      desktopLookState.dragging = true
+      desktopLookState.pointerId = event.pointerId
+      desktopLookState.lastX = event.clientX
+      desktopLookState.lastY = event.clientY
+      renderer.domElement.setPointerCapture(event.pointerId)
+      requestCoarseLod()
+      event.preventDefault()
       return
     }
-    desktopLookState.dragging = true
-    desktopLookState.pointerId = event.pointerId
-    desktopLookState.lastX = event.clientX
-    desktopLookState.lastY = event.clientY
-    renderer.domElement.setPointerCapture(event.pointerId)
-    requestCoarseLod()
-    event.preventDefault()
+
+    if (event.button === 1) {
+      desktopStrafeState.dragging = true
+      desktopStrafeState.pointerId = event.pointerId
+      desktopStrafeState.lastX = event.clientX
+      renderer.domElement.setPointerCapture(event.pointerId)
+      requestCoarseLod()
+      event.preventDefault()
+      return
+    }
   })
 
   renderer.domElement.addEventListener('pointermove', (event) => {
-    if (!desktopLookState.dragging || event.pointerId !== desktopLookState.pointerId) {
-      return
+    if (desktopLookState.dragging && event.pointerId === desktopLookState.pointerId) {
+      const dx = event.clientX - desktopLookState.lastX
+      const dy = event.clientY - desktopLookState.lastY
+      desktopLookState.lastX = event.clientX
+      desktopLookState.lastY = event.clientY
+
+      lookState.yaw -= dx * 0.0035
+      lookState.pitch -= dy * 0.0035
+      lookState.pitch = THREE.MathUtils.clamp(lookState.pitch, -1.45, 1.45)
+      applyLookDirection()
+      requestCoarseLod()
+      event.preventDefault()
     }
 
-    const dx = event.clientX - desktopLookState.lastX
-    const dy = event.clientY - desktopLookState.lastY
-    desktopLookState.lastX = event.clientX
-    desktopLookState.lastY = event.clientY
+    if (desktopStrafeState.dragging && event.pointerId === desktopStrafeState.pointerId) {
+      const dx = event.clientX - desktopStrafeState.lastX
+      desktopStrafeState.lastX = event.clientX
 
-    lookState.yaw -= dx * 0.0035
-    lookState.pitch -= dy * 0.0035
-    lookState.pitch = THREE.MathUtils.clamp(lookState.pitch, -1.45, 1.45)
-    applyLookDirection()
-    requestCoarseLod()
-    event.preventDefault()
+      movement.forward.subVectors(controls.target, camera.position)
+      if (movement.forward.lengthSq() < 1e-8) {
+        movement.forward.set(0, 0, -1)
+      } else {
+        movement.forward.normalize()
+      }
+      movement.right.crossVectors(movement.forward, camera.up)
+      if (movement.right.lengthSq() < 1e-8) {
+        movement.right.set(1, 0, 0)
+      } else {
+        movement.right.normalize()
+      }
+      movement.delta.copy(movement.right).multiplyScalar(dx * 0.015)
+      translateCameraAndTarget(movement.delta)
+      requestCoarseLod()
+      event.preventDefault()
+    }
   })
 
   const endDesktopLookDrag = (event) => {
-    if (!desktopLookState.dragging || event.pointerId !== desktopLookState.pointerId) {
-      return
+    if (desktopLookState.dragging && event.pointerId === desktopLookState.pointerId) {
+      desktopLookState.dragging = false
+      renderer.domElement.releasePointerCapture(event.pointerId)
+      desktopLookState.pointerId = null
     }
-    desktopLookState.dragging = false
-    renderer.domElement.releasePointerCapture(event.pointerId)
-    desktopLookState.pointerId = null
+    if (desktopStrafeState.dragging && event.pointerId === desktopStrafeState.pointerId) {
+      desktopStrafeState.dragging = false
+      renderer.domElement.releasePointerCapture(event.pointerId)
+      desktopStrafeState.pointerId = null
+    }
   }
 
   renderer.domElement.addEventListener('pointerup', endDesktopLookDrag)
@@ -292,12 +338,15 @@ if (!isCoarsePointer) {
   renderer.domElement.addEventListener(
     'wheel',
     (event) => {
-      const nextFov = THREE.MathUtils.clamp(camera.fov + event.deltaY * 0.02, 25, 90)
-      if (nextFov !== camera.fov) {
-        camera.fov = nextFov
-        camera.updateProjectionMatrix()
-        requestCoarseLod()
+      movement.forward.subVectors(controls.target, camera.position)
+      if (movement.forward.lengthSq() < 1e-8) {
+        movement.forward.set(0, 0, -1)
+      } else {
+        movement.forward.normalize()
       }
+      movement.delta.copy(movement.forward).multiplyScalar(-event.deltaY * 0.01)
+      translateCameraAndTarget(movement.delta)
+      requestCoarseLod()
       event.preventDefault()
     },
     { passive: false }
@@ -662,14 +711,18 @@ function updateMovement(deltaTime) {
   requestCoarseLod()
 
   movement.forward.subVectors(controls.target, camera.position)
-  movement.forward.y = 0
-  if (movement.forward.lengthSq() === 0) {
+  if (movement.forward.lengthSq() < 1e-8) {
     movement.forward.set(0, 0, -1)
   } else {
     movement.forward.normalize()
   }
 
-  movement.right.crossVectors(movement.forward, camera.up).normalize()
+  movement.right.crossVectors(movement.forward, camera.up)
+  if (movement.right.lengthSq() < 1e-8) {
+    movement.right.set(1, 0, 0)
+  } else {
+    movement.right.normalize()
+  }
   movement.up.copy(camera.up).normalize()
 
   movement.delta.set(0, 0, 0)
@@ -682,8 +735,7 @@ function updateMovement(deltaTime) {
   }
 
   movement.delta.normalize().multiplyScalar(MOVE_SPEED * deltaTime)
-  camera.position.add(movement.delta)
-  controls.target.add(movement.delta)
+  translateCameraAndTarget(movement.delta)
 }
 
 function updateAdaptiveLod(deltaTime) {
