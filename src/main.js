@@ -28,7 +28,7 @@ const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 const ORBIT_RADIUS = INITIAL_CAMERA_POSITION.distanceTo(INITIAL_TARGET)
 const SCENE_ALIGNMENT_ROTATION_X = Math.PI
-const POSE_ALIGNMENT_EXTRA_ROTATION_X = -Math.PI / 2
+const POSE_ALIGNMENT_EXTRA_ROTATION_X = Math.PI / 2
 
 const scene = new THREE.Scene()
 scene.background = null
