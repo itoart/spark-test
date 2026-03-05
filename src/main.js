@@ -318,7 +318,7 @@ if (!isCoarsePointer) {
       }
       movement.up.copy(camera.up).normalize()
       movement.delta.copy(movement.right).multiplyScalar(dx * 0.015)
-      movement.delta.addScaledVector(movement.up, -dy * 0.015)
+      movement.delta.addScaledVector(movement.up, dy * 0.015)
       translateCameraAndTarget(movement.delta)
       requestCoarseLod()
       event.preventDefault()
