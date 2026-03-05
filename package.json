@@ -1,0 +1,18 @@
+{
+  "name": "spark-test",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "@sparkjsdev/spark": "https://codeload.github.com/sparkjsdev/spark/tar.gz/refs/heads/v2.0.0-preview",
+    "three": "^0.183.1"
+  }
+}
