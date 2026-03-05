@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
-const MOVE_SPEED = 10
+const MOVE_SPEED = 5
 const LOOK_SPEED = 1.1
 const ENABLE_LOD = false
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
@@ -19,6 +19,7 @@ const LOD_SETTLE_DELAY_SECONDS = 0.35
 const LOD_ENABLE_DELAY_SECONDS = 0.2
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
+const ORBIT_RADIUS = INITIAL_CAMERA_POSITION.distanceTo(INITIAL_TARGET)
 
 const scene = new THREE.Scene()
 scene.background = null
@@ -108,9 +109,9 @@ overlay.className = 'controls-hint is-collapsed'
 overlay.innerHTML = `
   <strong>Controls</strong>
   <button class="menu-load-btn" type="button">Load Splat</button>
-  <span>${isCoarsePointer ? 'Left pad: Move' : 'Left drag: Orbit'}</span>
-  <span>${isCoarsePointer ? 'Right pad: Look around' : 'Wheel: Zoom'}</span>
-  <span>${isCoarsePointer ? 'UP/DOWN: Vertical move' : 'Right drag or Shift+Left drag: Pan'}</span>
+  <span>${isCoarsePointer ? 'Left pad: Move' : 'Left drag: Look around'}</span>
+  <span>${isCoarsePointer ? 'Right pad: Look around' : 'Right drag: Orbit'}</span>
+  <span>${isCoarsePointer ? 'UP/DOWN: Vertical move' : 'Wheel: Zoom (FOV only)'}</span>
   <span>${isCoarsePointer ? 'Double tap: Reset view' : 'W/A/S/D: Move'}</span>
   <span>${isCoarsePointer ? 'Q/E keys also work' : 'Q/E: Move down/up'}</span>
   <span>R: Reset</span>
@@ -143,6 +144,12 @@ controls.enableDamping = true
 controls.dampingFactor = 0.08
 controls.rotateSpeed = 0.5
 controls.screenSpacePanning = true
+controls.enablePan = false
+controls.enableZoom = false
+controls.minDistance = ORBIT_RADIUS
+controls.maxDistance = ORBIT_RADIUS
+controls.mouseButtons.LEFT = THREE.MOUSE.NONE
+controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE
 controls.target.copy(INITIAL_TARGET)
 controls.enabled = !isCoarsePointer
 controls.update()
@@ -174,6 +181,13 @@ const touchInput = {
   lookY: 0,
 }
 
+const desktopLookState = {
+  dragging: false,
+  pointerId: null,
+  lastX: 0,
+  lastY: 0,
+}
+
 const lookState = {
   yaw: 0,
   pitch: 0,
@@ -200,6 +214,17 @@ function syncLookStateFromCamera() {
   )
 }
 
+function applyLookDirection() {
+  const cosPitch = Math.cos(lookState.pitch)
+  const direction = new THREE.Vector3(
+    Math.sin(lookState.yaw) * cosPitch,
+    Math.sin(lookState.pitch),
+    Math.cos(lookState.yaw) * cosPitch
+  )
+
+  controls.target.copy(camera.position).addScaledVector(direction, ORBIT_RADIUS)
+}
+
 function resetView() {
   camera.position.copy(INITIAL_CAMERA_POSITION)
   controls.target.copy(INITIAL_TARGET)
@@ -219,6 +244,65 @@ function requestCoarseLod(seconds = LOD_SETTLE_DELAY_SECONDS) {
 }
 
 syncLookStateFromCamera()
+
+if (!isCoarsePointer) {
+  renderer.domElement.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) {
+      return
+    }
+    desktopLookState.dragging = true
+    desktopLookState.pointerId = event.pointerId
+    desktopLookState.lastX = event.clientX
+    desktopLookState.lastY = event.clientY
+    renderer.domElement.setPointerCapture(event.pointerId)
+    requestCoarseLod()
+    event.preventDefault()
+  })
+
+  renderer.domElement.addEventListener('pointermove', (event) => {
+    if (!desktopLookState.dragging || event.pointerId !== desktopLookState.pointerId) {
+      return
+    }
+
+    const dx = event.clientX - desktopLookState.lastX
+    const dy = event.clientY - desktopLookState.lastY
+    desktopLookState.lastX = event.clientX
+    desktopLookState.lastY = event.clientY
+
+    lookState.yaw -= dx * 0.0035
+    lookState.pitch -= dy * 0.0035
+    lookState.pitch = THREE.MathUtils.clamp(lookState.pitch, -1.45, 1.45)
+    applyLookDirection()
+    requestCoarseLod()
+    event.preventDefault()
+  })
+
+  const endDesktopLookDrag = (event) => {
+    if (!desktopLookState.dragging || event.pointerId !== desktopLookState.pointerId) {
+      return
+    }
+    desktopLookState.dragging = false
+    renderer.domElement.releasePointerCapture(event.pointerId)
+    desktopLookState.pointerId = null
+  }
+
+  renderer.domElement.addEventListener('pointerup', endDesktopLookDrag)
+  renderer.domElement.addEventListener('pointercancel', endDesktopLookDrag)
+
+  renderer.domElement.addEventListener(
+    'wheel',
+    (event) => {
+      const nextFov = THREE.MathUtils.clamp(camera.fov + event.deltaY * 0.02, 25, 90)
+      if (nextFov !== camera.fov) {
+        camera.fov = nextFov
+        camera.updateProjectionMatrix()
+        requestCoarseLod()
+      }
+      event.preventDefault()
+    },
+    { passive: false }
+  )
+}
 
 controls.addEventListener('start', () => {
   lodRampState.controlsInteracting = true
@@ -557,14 +641,7 @@ function updateLook(deltaTime) {
   lookState.pitch -= touchInput.lookY * LOOK_SPEED * deltaTime
   lookState.pitch = THREE.MathUtils.clamp(lookState.pitch, -1.45, 1.45)
 
-  const cosPitch = Math.cos(lookState.pitch)
-  const direction = new THREE.Vector3(
-    Math.sin(lookState.yaw) * cosPitch,
-    Math.sin(lookState.pitch),
-    Math.cos(lookState.yaw) * cosPitch
-  )
-
-  controls.target.copy(camera.position).add(direction)
+  applyLookDirection()
 }
 
 function updateMovement(deltaTime) {
@@ -667,6 +744,9 @@ function animate() {
     camera.lookAt(controls.target)
   } else {
     controls.update()
+    if (!desktopLookState.dragging) {
+      syncLookStateFromCamera()
+    }
   }
   updateAdaptiveLod(deltaTime)
   renderer.render(scene, camera)
