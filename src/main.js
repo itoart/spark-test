@@ -6,10 +6,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 const MOVE_SPEED = 10
 const LOOK_SPEED = 1.1
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
-const LOD_SCALE_COARSE = isCoarsePointer ? 1.0 : 1.2
+const LOD_SCALE_COARSE = isCoarsePointer ? 0.75 : 0.5
 const LOD_SCALE_FINE = isCoarsePointer ? 2.0 : 2.6
-const LOD_RAMP_SECONDS = 1.8
-const LOD_MOTION_THRESHOLD = 0.22
+const LOD_RAMP_SECONDS = 2.2
+const LOD_MOTION_THRESHOLD = 0.015
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 
@@ -447,7 +447,7 @@ function updateAdaptiveLod(deltaTime) {
 
   const positionDelta = camera.position.distanceTo(lodRampState.lastPos)
   const angleDelta = camera.quaternion.angleTo(lodRampState.lastQuat)
-  const motion = positionDelta + angleDelta * 3.0
+  const motion = positionDelta + angleDelta * 2.0
 
   if (motion > LOD_MOTION_THRESHOLD) {
     lodRampState.settleTime = 0
@@ -479,12 +479,12 @@ function animate() {
   const deltaTime = clock.getDelta()
   updateLook(deltaTime)
   updateMovement(deltaTime)
-  updateAdaptiveLod(deltaTime)
   if (isCoarsePointer) {
     camera.lookAt(controls.target)
   } else {
     controls.update()
   }
+  updateAdaptiveLod(deltaTime)
   renderer.render(scene, camera)
 }
 
