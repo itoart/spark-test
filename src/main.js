@@ -6,6 +6,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 const MOVE_SPEED = 10
 const LOOK_SPEED = 2.2
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
+const LOD_SCALE_COARSE = isCoarsePointer ? 0.85 : 1.0
+const LOD_SCALE_FINE = isCoarsePointer ? 2.0 : 2.6
+const LOD_RAMP_SECONDS = 1.8
+const LOD_MOTION_THRESHOLD = 0.22
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 0, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 0, 0)
 
@@ -29,7 +33,7 @@ document.body.appendChild(renderer.domElement)
 const controlsToggle = document.createElement('button')
 controlsToggle.className = 'controls-toggle'
 controlsToggle.type = 'button'
-controlsToggle.textContent = '☰'
+controlsToggle.innerHTML = '&#9776;'
 controlsToggle.setAttribute('aria-label', 'Toggle controls help')
 controlsToggle.setAttribute('aria-expanded', 'false')
 document.body.appendChild(controlsToggle)
@@ -98,6 +102,12 @@ const touchInput = {
 const lookState = {
   yaw: 0,
   pitch: 0,
+}
+const lodRampState = {
+  active: false,
+  settleTime: 0,
+  lastPos: new THREE.Vector3(),
+  lastQuat: new THREE.Quaternion(),
 }
 
 const clock = new THREE.Clock()
@@ -297,7 +307,7 @@ createMobileControls()
 const spark = new SparkRenderer({
   renderer,
   enableLod: true,
-  lodSplatScale: isCoarsePointer ? 2.0 : 2.6,
+  lodSplatScale: LOD_SCALE_COARSE,
   behindFoveate: 1.0,
   numLodFetchers: isCoarsePointer ? 2 : 4,
 })
@@ -317,6 +327,14 @@ function hasGeneratedLod(mesh) {
   return Boolean(mesh.packedSplats?.lodSplats || mesh.extSplats?.lodSplats)
 }
 
+function initializeLodRamp() {
+  lodRampState.active = true
+  lodRampState.settleTime = 0
+  lodRampState.lastPos.copy(camera.position)
+  lodRampState.lastQuat.copy(camera.quaternion)
+  spark.lodSplatScale = LOD_SCALE_COARSE
+}
+
 async function initializeLod() {
   try {
     lodStatus.textContent = 'Loading splats...'
@@ -330,7 +348,8 @@ async function initializeLod() {
 
     if (hasGeneratedLod(splat)) {
       splat.enableLod = true
-      lodStatus.textContent = 'LoD enabled'
+      initializeLodRamp()
+      lodStatus.textContent = 'LoD enabled (coarse -> fine)'
     } else if (!canCreateLod) {
       lodStatus.textContent = 'LoD API unavailable in current Spark build'
     } else {
@@ -420,11 +439,42 @@ function updateMovement(deltaTime) {
   controls.target.add(movement.delta)
 }
 
+function updateAdaptiveLod(deltaTime) {
+  if (!lodRampState.active || !splat.enableLod) {
+    return
+  }
+
+  const positionDelta = camera.position.distanceTo(lodRampState.lastPos)
+  const angleDelta = camera.quaternion.angleTo(lodRampState.lastQuat)
+  const motion = positionDelta + angleDelta * 3.0
+
+  if (motion > LOD_MOTION_THRESHOLD) {
+    lodRampState.settleTime = 0
+  } else {
+    lodRampState.settleTime = Math.min(
+      LOD_RAMP_SECONDS,
+      lodRampState.settleTime + deltaTime
+    )
+  }
+
+  const t = lodRampState.settleTime / LOD_RAMP_SECONDS
+  const targetScale = THREE.MathUtils.lerp(LOD_SCALE_COARSE, LOD_SCALE_FINE, t)
+  spark.lodSplatScale = THREE.MathUtils.lerp(
+    spark.lodSplatScale,
+    targetScale,
+    0.12
+  )
+
+  lodRampState.lastPos.copy(camera.position)
+  lodRampState.lastQuat.copy(camera.quaternion)
+}
+
 function animate() {
   requestAnimationFrame(animate)
   const deltaTime = clock.getDelta()
   updateLook(deltaTime)
   updateMovement(deltaTime)
+  updateAdaptiveLod(deltaTime)
   if (isCoarsePointer) {
     camera.lookAt(controls.target)
   } else {
