@@ -28,7 +28,9 @@ const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 const ORBIT_RADIUS = INITIAL_CAMERA_POSITION.distanceTo(INITIAL_TARGET)
 const SCENE_ALIGNMENT_ROTATION_X = Math.PI
-const POSE_ALIGNMENT_EXTRA_ROTATION_X = Math.PI / 2
+const POSE_CAM_FIX_X = new THREE.Quaternion().setFromEuler(
+  new THREE.Euler(Math.PI, 0, 0, 'XYZ')
+)
 
 const scene = new THREE.Scene()
 scene.background = null
@@ -594,8 +596,7 @@ scene.add(spark)
 
 let activeSplat = null
 const poseMarkersRoot = new THREE.Group()
-poseMarkersRoot.rotation.x =
-  SCENE_ALIGNMENT_ROTATION_X + POSE_ALIGNMENT_EXTRA_ROTATION_X
+poseMarkersRoot.rotation.x = SCENE_ALIGNMENT_ROTATION_X
 scene.add(poseMarkersRoot)
 
 function clearPoseMarkers() {
@@ -637,8 +638,11 @@ function parsePosesText(text) {
     }
     poses.push({
       name,
-      position: new THREE.Vector3(nums[0], nums[1], nums[2]),
-      quaternion: new THREE.Quaternion(nums[4], nums[5], nums[6], nums[3]),
+      // Match PlayCanvas mapping: (x, y, alt) -> (x, -alt, y)
+      position: new THREE.Vector3(nums[0], -nums[2], nums[1]),
+      quaternion: new THREE.Quaternion(nums[4], nums[5], nums[6], nums[3])
+        .invert()
+        .multiply(POSE_CAM_FIX_X),
     })
   }
   return poses
