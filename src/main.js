@@ -449,7 +449,7 @@ function setControlKey(code, pressed) {
 }
 
 function bindVirtualStick({ root, base, stick, setX, setY }) {
-  const maxRadius = 36
+  const getMaxRadius = () => Math.max(24, base.clientWidth * 0.36)
 
   const resetStick = () => {
     setX(0)
@@ -464,6 +464,7 @@ function bindVirtualStick({ root, base, stick, setX, setY }) {
     const cy = rect.top + rect.height / 2
     const dx = event.clientX - cx
     const dy = event.clientY - cy
+    const maxRadius = getMaxRadius()
     const distance = Math.min(maxRadius, Math.hypot(dx, dy))
     const angle = Math.atan2(dy, dx)
     const clampedX = Math.cos(angle) * distance
