@@ -6,7 +6,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 const MOVE_SPEED = 10
 const LOOK_SPEED = 1.1
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
-const LOD_SCALE_COARSE = isCoarsePointer ? 0.75 : 0.5
+const LOD_SCALE_COARSE = isCoarsePointer ? 1.2 : 1.0
 const LOD_SCALE_FINE = isCoarsePointer ? 2.0 : 2.6
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
