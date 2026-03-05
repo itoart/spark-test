@@ -6,10 +6,11 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 const MOVE_SPEED = 10
 const LOOK_SPEED = 1.1
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
-const LOD_SCALE_COARSE = isCoarsePointer ? 1.2 : 1.0
+const LOD_SCALE_COARSE = isCoarsePointer ? 1.2 : 0.9
 const LOD_SCALE_FINE = isCoarsePointer ? 2.0 : 2.6
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
+const LOD_SETTLE_DELAY_SECONDS = 0.35
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 
@@ -107,6 +108,8 @@ const lookState = {
 const lodRampState = {
   active: false,
   settleTime: 0,
+  controlsInteracting: false,
+  forceCoarseUntil: 0,
   lastPos: new THREE.Vector3(),
   lastQuat: new THREE.Quaternion(),
 }
@@ -130,7 +133,27 @@ function resetView() {
   controls.update()
 }
 
+function nowSeconds() {
+  return performance.now() * 0.001
+}
+
+function requestCoarseLod(seconds = LOD_SETTLE_DELAY_SECONDS) {
+  lodRampState.forceCoarseUntil = Math.max(
+    lodRampState.forceCoarseUntil,
+    nowSeconds() + seconds
+  )
+}
+
 syncLookStateFromCamera()
+
+controls.addEventListener('start', () => {
+  lodRampState.controlsInteracting = true
+  requestCoarseLod(1.0)
+})
+controls.addEventListener('end', () => {
+  lodRampState.controlsInteracting = false
+  requestCoarseLod()
+})
 
 window.addEventListener('keydown', (event) => {
   if (event.code === 'KeyR') {
@@ -144,6 +167,7 @@ window.addEventListener('keydown', (event) => {
   }
 
   keyState[event.code] = true
+  requestCoarseLod()
   event.preventDefault()
 })
 
@@ -153,6 +177,7 @@ window.addEventListener('keyup', (event) => {
   }
 
   keyState[event.code] = false
+  requestCoarseLod()
   event.preventDefault()
 })
 
@@ -167,6 +192,7 @@ function setControlKey(code, pressed) {
     return
   }
   keyState[code] = pressed
+  requestCoarseLod()
 }
 
 function bindVirtualStick({ root, base, stick, setX, setY }) {
@@ -384,6 +410,7 @@ function updateLook(deltaTime) {
   if (touchInput.lookX === 0 && touchInput.lookY === 0) {
     return
   }
+  requestCoarseLod()
 
   lookState.yaw -= touchInput.lookX * LOOK_SPEED * deltaTime
   lookState.pitch -= touchInput.lookY * LOOK_SPEED * deltaTime
@@ -414,6 +441,7 @@ function updateMovement(deltaTime) {
   if (forwardInput === 0 && rightInput === 0 && verticalInput === 0) {
     return
   }
+  requestCoarseLod()
 
   movement.forward.subVectors(controls.target, camera.position)
   movement.forward.y = 0
@@ -448,8 +476,10 @@ function updateAdaptiveLod(deltaTime) {
   const positionDelta = camera.position.distanceTo(lodRampState.lastPos)
   const angleDelta = camera.quaternion.angleTo(lodRampState.lastQuat)
   const motion = positionDelta + angleDelta * 2.0
+  const coarseRequested =
+    lodRampState.controlsInteracting || nowSeconds() < lodRampState.forceCoarseUntil
 
-  if (motion > LOD_MOTION_THRESHOLD) {
+  if (coarseRequested || motion > LOD_MOTION_THRESHOLD) {
     lodRampState.settleTime = 0
     spark.lodSplatScale = THREE.MathUtils.lerp(
       spark.lodSplatScale,
