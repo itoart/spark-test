@@ -4,14 +4,14 @@ import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const MOVE_SPEED = 10
-const LOOK_SPEED = 2.2
+const LOOK_SPEED = 1.1
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
 const LOD_SCALE_COARSE = isCoarsePointer ? 0.85 : 1.0
 const LOD_SCALE_FINE = isCoarsePointer ? 2.0 : 2.6
 const LOD_RAMP_SECONDS = 1.8
 const LOD_MOTION_THRESHOLD = 0.22
-const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 0, 20)
-const INITIAL_TARGET = new THREE.Vector3(0, 0, 0)
+const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
+const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 
 const scene = new THREE.Scene()
 
@@ -67,6 +67,7 @@ document.body.appendChild(lodStatus)
 const controls = new OrbitControls(camera, renderer.domElement)
 controls.enableDamping = true
 controls.dampingFactor = 0.08
+controls.rotateSpeed = 0.5
 controls.screenSpacePanning = true
 controls.target.copy(INITIAL_TARGET)
 controls.enabled = !isCoarsePointer
