@@ -251,8 +251,8 @@ canvas {
 }
 
 .mobile-tri {
-  width: 52px;
-  height: 42px;
+  width: 62px;
+  height: 50px;
   justify-self: center;
   border-radius: 10px;
 }
@@ -297,7 +297,7 @@ canvas {
   }
 
   .mobile-tri {
-    width: 44px;
-    height: 36px;
+    width: 53px;
+    height: 43px;
   }
 }
