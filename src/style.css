@@ -280,8 +280,8 @@ canvas {
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  opacity: 0.3;
-  mix-blend-mode: darken;
+  opacity: 0.95;
+  mix-blend-mode: multiply;
 }
 
 .mobile-tri-down::before {
@@ -289,7 +289,7 @@ canvas {
 }
 
 .mobile-tri.is-active::before {
-  opacity: 0.45;
+  opacity: 1;
 }
 
 @media (pointer: coarse) {
