@@ -509,8 +509,8 @@ function createMobileControls() {
       </div>
     </div>
     <div class="mobile-vertical">
-      <button class="mobile-tri mobile-tri-up" data-key="KeyE" aria-label="UP">▲</button>
-      <button class="mobile-tri mobile-tri-down" data-key="KeyQ" aria-label="DOWN">▼</button>
+      <button class="mobile-tri mobile-tri-up" data-key="KeyE" aria-label="UP"></button>
+      <button class="mobile-tri mobile-tri-down" data-key="KeyQ" aria-label="DOWN"></button>
     </div>
     <div class="mobile-look">
       <div class="mobile-stick-label">LOOK</div>

@@ -179,6 +179,7 @@ canvas {
   flex-direction: column;
   align-items: center;
   gap: 0;
+  pointer-events: auto;
 }
 
 .mobile-stick-label {
@@ -226,15 +227,15 @@ canvas {
 .mobile-vertical {
   display: grid;
   grid-template-columns: 66px;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 14px;
+  margin-bottom: 22px;
   pointer-events: auto;
 }
 
 .mobile-controls button {
   border: 1px solid rgba(255, 255, 255, 0.24);
   background: var(--mobile-overlay-bg);
-  color: inherit;
+  color: transparent;
   font-size: 1.12rem;
   font-weight: 600;
   line-height: 1;
@@ -247,8 +248,8 @@ canvas {
 }
 
 .mobile-tri {
-  width: 56px;
-  height: 46px;
+  width: 52px;
+  height: 42px;
   justify-self: center;
   border-radius: 10px;
 }
@@ -288,12 +289,12 @@ canvas {
 
   .mobile-vertical {
     grid-template-columns: 56px;
-    gap: 14px;
-    margin-bottom: 12px;
+    gap: 12px;
+    margin-bottom: 18px;
   }
 
   .mobile-tri {
-    width: 48px;
-    height: 40px;
+    width: 44px;
+    height: 36px;
   }
 }
