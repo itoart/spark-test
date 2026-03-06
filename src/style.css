@@ -27,6 +27,9 @@ body {
   background:
     radial-gradient(circle at 50% -20%, rgba(255, 255, 255, 0.7), transparent 50%),
     linear-gradient(180deg, #9fd6ff 0%, #80c0f4 45%, #6db1ee 100%);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 canvas {
@@ -64,6 +67,7 @@ canvas {
   backdrop-filter: blur(10px);
   z-index: 29;
   transition: opacity 160ms ease;
+  touch-action: manipulation;
 }
 
 .controls-hint.is-collapsed {
@@ -85,6 +89,7 @@ canvas {
   background: rgba(255, 255, 255, 0.08);
   color: inherit;
   font-size: 0.8rem;
+  touch-action: manipulation;
 }
 
 .overlay-top {
@@ -119,6 +124,7 @@ canvas {
   background: rgba(12, 12, 12, 0.9);
   color: inherit;
   font-size: 0.72rem;
+  touch-action: manipulation;
 }
 
 .controls-hint strong {
@@ -180,6 +186,7 @@ canvas {
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .marker-list-link:hover {

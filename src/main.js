@@ -192,6 +192,35 @@ controlsToggle.addEventListener('click', () => {
   )
 })
 
+const overlayTapState = {
+  lastTapAt: 0,
+  lastTapX: 0,
+  lastTapY: 0,
+}
+
+overlay.addEventListener(
+  'touchend',
+  (event) => {
+    if (event.changedTouches.length !== 1) {
+      return
+    }
+    const touch = event.changedTouches[0]
+    const now = Date.now()
+    const dist = Math.hypot(
+      touch.clientX - overlayTapState.lastTapX,
+      touch.clientY - overlayTapState.lastTapY
+    )
+    if (now - overlayTapState.lastTapAt < 320 && dist <= 28) {
+      // Prevent browser double-tap zoom inside hamburger UI.
+      event.preventDefault()
+    }
+    overlayTapState.lastTapAt = now
+    overlayTapState.lastTapX = touch.clientX
+    overlayTapState.lastTapY = touch.clientY
+  },
+  { passive: false }
+)
+
 const lodStatus = document.createElement('div')
 lodStatus.className = 'lod-status'
 lodStatus.textContent = 'No splat loaded'
@@ -970,6 +999,7 @@ const markerPointerNdc = new THREE.Vector2()
 markerRaycaster.params.Line.threshold = 0.14
 const markerListRegistry = new Map()
 let markerListIdSeed = 0
+let markerPreviewPinned = false
 
 const imageStore = {
   byFullName: new Map(),
@@ -1028,19 +1058,21 @@ function hideMarkerPreview() {
     markerPreviewImg.removeAttribute('src')
   }
   markerPreview.classList.remove('is-active')
+  markerPreviewPinned = false
 }
 
 function setMarkerPreviewReady(ready) {
   markerPreview.classList.toggle('is-ready', ready)
 }
 
-function showMarkerPreview(markerData) {
+function showMarkerPreview(markerData, { pinned = false } = {}) {
   if (!markerData?.imageEntry || !markerPreviewImg) {
     hideMarkerPreview()
     return
   }
   markerPreviewImg.src = markerData.imageEntry.objectUrl
   markerPreview.classList.add('is-active')
+  markerPreviewPinned = pinned
 }
 
 function warpToMarker(markerData) {
@@ -1510,7 +1542,7 @@ markerListItems?.addEventListener('click', (event) => {
   if (!markerData) {
     return
   }
-  hideMarkerPreview()
+  showMarkerPreview(markerData, { pinned: true })
   warpToMarker(markerData)
 })
 
@@ -1521,19 +1553,40 @@ markerListItems?.addEventListener('mousemove', (event) => {
   }
   const button = target.closest('.marker-list-link')
   if (!(button instanceof HTMLElement)) {
-    hideMarkerPreview()
+    if (!markerPreviewPinned) {
+      hideMarkerPreview()
+    }
     return
   }
   const markerId = button.dataset.markerId
   if (!markerId) {
-    hideMarkerPreview()
+    if (!markerPreviewPinned) {
+      hideMarkerPreview()
+    }
     return
   }
   const markerData = markerListRegistry.get(markerId)
-  showMarkerPreview(markerData)
+  showMarkerPreview(markerData, { pinned: false })
 })
 
 markerListItems?.addEventListener('mouseleave', () => {
+  if (!markerPreviewPinned) {
+    hideMarkerPreview()
+  }
+})
+
+document.addEventListener('pointerdown', (event) => {
+  if (!markerPreviewPinned) {
+    return
+  }
+  const target = event.target
+  if (!(target instanceof Node)) {
+    hideMarkerPreview()
+    return
+  }
+  if (markerListItems?.contains(target) || markerPreview.contains(target)) {
+    return
+  }
   hideMarkerPreview()
 })
 
