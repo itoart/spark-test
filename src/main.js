@@ -2,7 +2,6 @@ import './style.css'
 import * as THREE from 'three'
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import mobileArrowImageUrl from './assets/arrow.png'
 
 const MOVE_SPEED = 5
 const LOOK_SPEED = 1.1
@@ -35,7 +34,7 @@ const SCENE_ALIGNMENT_ROTATION_X = Math.PI
 const POSE_CAM_FIX_X = new THREE.Quaternion().setFromEuler(
   new THREE.Euler(Math.PI, 0, 0, 'XYZ')
 )
-const MOBILE_ARROW_IMAGE_URL = mobileArrowImageUrl
+const MOBILE_ARROW_IMAGE_URL = `${import.meta.env.BASE_URL}ui/arrow.png`
 
 const scene = new THREE.Scene()
 scene.background = null
