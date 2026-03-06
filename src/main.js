@@ -34,6 +34,7 @@ const SCENE_ALIGNMENT_ROTATION_X = Math.PI
 const POSE_CAM_FIX_X = new THREE.Quaternion().setFromEuler(
   new THREE.Euler(Math.PI, 0, 0, 'XYZ')
 )
+const MOBILE_ARROW_IMAGE_URL = `${import.meta.env.BASE_URL}ui/arrow.png`
 
 const scene = new THREE.Scene()
 scene.background = null
@@ -553,6 +554,10 @@ function createMobileControls() {
       touchInput.lookY = y
     },
   })
+
+  for (const icon of mobileControls.querySelectorAll('.mobile-tri-icon')) {
+    icon.style.backgroundImage = `url('${MOBILE_ARROW_IMAGE_URL}')`
+  }
 
   const release = (button) => {
     button.classList.remove('is-active')
