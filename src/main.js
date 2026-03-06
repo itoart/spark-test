@@ -61,6 +61,12 @@ const MARKER_DOUBLE_TAP_DISTANCE_PX = 26
 const IMAGE_VIEW_MIN_SCALE = 0.7
 const IMAGE_VIEW_MAX_SCALE = 8
 const MARKER_WARP_BACK_OFFSET = 2.5
+const DEFAULT_INPUT_ACCEPT =
+  '.ply,.sog,.sogs,.spz,.splat,.ksplat,.json,.zip,.txt,.csv,.jpg,.jpeg,.png,.webp,.bmp,.gif,.tif,.tiff'
+const isAppleMobileLike =
+  /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+const INPUT_ACCEPT = isAppleMobileLike ? '*/*' : DEFAULT_INPUT_ACCEPT
 
 const scene = new THREE.Scene()
 scene.background = null
@@ -133,8 +139,7 @@ document.body.appendChild(renderer.domElement)
 
 const fileInput = document.createElement('input')
 fileInput.type = 'file'
-fileInput.accept =
-  '.ply,.sog,.sogs,.spz,.splat,.ksplat,.json,.zip,.txt,.csv,.jpg,.jpeg,.png,.webp,.bmp,.gif,.tif,.tiff'
+fileInput.accept = INPUT_ACCEPT
 fileInput.multiple = true
 fileInput.style.display = 'none'
 document.body.appendChild(fileInput)
@@ -142,7 +147,7 @@ document.body.appendChild(fileInput)
 const directoryInput = document.createElement('input')
 directoryInput.type = 'file'
 directoryInput.multiple = true
-directoryInput.accept = fileInput.accept
+directoryInput.accept = INPUT_ACCEPT
 directoryInput.style.display = 'none'
 directoryInput.setAttribute('webkitdirectory', '')
 directoryInput.setAttribute('directory', '')
