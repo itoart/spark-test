@@ -54,9 +54,9 @@ canvas {
   top: 72px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 220px;
-  padding: 14px 18px;
+  gap: 12px;
+  min-width: 246px;
+  padding: 16px 14px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 14px;
   background: rgba(8, 8, 8, 0.82);
@@ -78,13 +78,47 @@ canvas {
 }
 
 .menu-load-btn {
-  height: 34px;
-  margin-bottom: 6px;
+  height: 36px;
+  margin-bottom: 0;
   border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.08);
   color: inherit;
   font-size: 0.8rem;
+}
+
+.overlay-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.menu-load-wrap {
+  position: relative;
+  margin-top: 6px;
+}
+
+.menu-load-choice {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+
+.menu-load-choice.is-hidden {
+  display: none;
+}
+
+.menu-load-choice-btn {
+  height: 30px;
+  min-width: 68px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 9px;
+  background: rgba(12, 12, 12, 0.9);
+  color: inherit;
+  font-size: 0.72rem;
 }
 
 .controls-hint strong {
@@ -94,6 +128,89 @@ canvas {
 .controls-hint span {
   font-size: 0.8rem;
   opacity: 0.72;
+}
+
+.marker-list {
+  margin-top: 0;
+  margin-bottom: 0;
+  padding: 10px 10px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.marker-list strong {
+  font-size: 0.8rem;
+}
+
+.marker-list-empty {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.74rem;
+  opacity: 0.64;
+}
+
+.marker-list-empty.is-hidden {
+  display: none;
+}
+
+.marker-list-items {
+  margin: 6px 0 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 304px;
+  overflow-y: auto;
+}
+
+.marker-list-items li {
+  margin-bottom: 2px;
+}
+
+.marker-list-link {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 2px 4px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  opacity: 0.82;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.marker-list-link:hover {
+  background: rgba(255, 255, 255, 0.14);
+  opacity: 1;
+}
+
+.marker-preview-box {
+  display: none;
+  width: 154px;
+  height: 104px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.marker-preview-box.is-ready {
+  display: block;
+}
+
+.marker-preview-box .marker-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.marker-preview-box.is-active .marker-preview-img {
+  opacity: 1;
 }
 
 .lod-status {
@@ -130,6 +247,87 @@ canvas {
 
 .loading-overlay.is-active {
   display: flex;
+}
+
+.image-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 8, 14, 0.72);
+  backdrop-filter: blur(3px);
+  z-index: 70;
+}
+
+.image-overlay.is-active {
+  display: flex;
+}
+
+.image-overlay-panel {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  border-radius: 0;
+  overflow: hidden;
+  background: rgba(6, 8, 10, 0.94);
+}
+
+.image-overlay-header {
+  height: 48px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px 0 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.image-overlay-title {
+  font-size: 0.82rem;
+  opacity: 0.92;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.image-overlay-close {
+  height: 30px;
+  min-width: 64px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-size: 0.74rem;
+}
+
+.image-overlay-stage {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+
+.image-overlay-stage:active {
+  cursor: grabbing;
+}
+
+.image-overlay-img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: 92%;
+  max-height: 92%;
+  object-fit: contain;
+  transform-origin: center center;
+  transform: translate(-50%, -50%) scale(1);
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
 }
 
 .loading-spinner {

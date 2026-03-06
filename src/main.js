@@ -35,6 +35,32 @@ const POSE_CAM_FIX_X = new THREE.Quaternion().setFromEuler(
   new THREE.Euler(Math.PI, 0, 0, 'XYZ')
 )
 const MOBILE_ARROW_IMAGE_URL = `${import.meta.env.BASE_URL}ui/arrow.png`
+const SPLAT_EXTENSIONS = new Set([
+  '.ply',
+  '.sog',
+  '.sogs',
+  '.spz',
+  '.splat',
+  '.ksplat',
+  '.json',
+  '.zip',
+])
+const POSE_EXTENSIONS = new Set(['.txt', '.csv'])
+const IMAGE_EXTENSIONS = new Set([
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.bmp',
+  '.gif',
+  '.tif',
+  '.tiff',
+])
+const MARKER_DOUBLE_TAP_MS = 280
+const MARKER_DOUBLE_TAP_DISTANCE_PX = 26
+const IMAGE_VIEW_MIN_SCALE = 0.7
+const IMAGE_VIEW_MAX_SCALE = 8
+const MARKER_WARP_BACK_OFFSET = 2.5
 
 const scene = new THREE.Scene()
 scene.background = null
@@ -107,15 +133,20 @@ document.body.appendChild(renderer.domElement)
 
 const fileInput = document.createElement('input')
 fileInput.type = 'file'
-fileInput.accept = '.ply,.sog,.sogs,.spz,.splat,.ksplat,.json,.zip'
+fileInput.accept =
+  '.ply,.sog,.sogs,.spz,.splat,.ksplat,.json,.zip,.txt,.csv,.jpg,.jpeg,.png,.webp,.bmp,.gif,.tif,.tiff'
+fileInput.multiple = true
 fileInput.style.display = 'none'
 document.body.appendChild(fileInput)
 
-const poseInput = document.createElement('input')
-poseInput.type = 'file'
-poseInput.accept = '.txt,.csv'
-poseInput.style.display = 'none'
-document.body.appendChild(poseInput)
+const directoryInput = document.createElement('input')
+directoryInput.type = 'file'
+directoryInput.multiple = true
+directoryInput.accept = fileInput.accept
+directoryInput.style.display = 'none'
+directoryInput.setAttribute('webkitdirectory', '')
+directoryInput.setAttribute('directory', '')
+document.body.appendChild(directoryInput)
 
 const controlsToggle = document.createElement('button')
 controlsToggle.className = 'controls-toggle'
@@ -128,16 +159,23 @@ document.body.appendChild(controlsToggle)
 const overlay = document.createElement('div')
 overlay.className = 'controls-hint is-collapsed'
 overlay.innerHTML = `
-  <strong>Controls</strong>
-  <button class="menu-load-btn" type="button">Load Splat</button>
-  <button class="menu-load-btn menu-load-poses-btn" type="button">Load Poses</button>
-  <span>${isCoarsePointer ? 'Left pad: Move' : 'Left drag: Orbit'}</span>
-  <span>${isCoarsePointer ? 'Right pad: Look around' : 'Right drag: Look around'}</span>
-  <span>${isCoarsePointer ? 'UP/DOWN: Vertical move' : 'Wheel: Forward/Back'}</span>
-  <span>${isCoarsePointer ? 'Double tap: Reset view' : 'Middle drag: Left/Right + Up/Down'}</span>
-  <span>${isCoarsePointer ? 'Double tap: Reset view' : 'W/A/S/D: Move'}</span>
-  <span>${isCoarsePointer ? 'Q/E keys also work' : 'Q/E: Move down/up'}</span>
-  <span>R: Reset</span>
+  <div class="overlay-top">
+    <div class="menu-load-wrap">
+      <button class="menu-load-btn" type="button">Load</button>
+      <div class="menu-load-choice is-hidden">
+        <button class="menu-load-choice-btn" type="button" data-load-mode="files">Files</button>
+        <button class="menu-load-choice-btn" type="button" data-load-mode="folder">Folder</button>
+      </div>
+    </div>
+    <div class="marker-preview-box">
+      <img class="marker-preview-img" alt="marker thumbnail" />
+    </div>
+  </div>
+  <div class="marker-list">
+    <strong>Markers</strong>
+    <span class="marker-list-empty">No markers</span>
+    <ul class="marker-list-items"></ul>
+  </div>
 `
 document.body.appendChild(overlay)
 
@@ -161,6 +199,45 @@ loadingOverlay.innerHTML = `
   <div class="loading-text">Loading splat...</div>
 `
 document.body.appendChild(loadingOverlay)
+
+const imageOverlay = document.createElement('div')
+imageOverlay.className = 'image-overlay'
+imageOverlay.innerHTML = `
+  <div class="image-overlay-panel">
+    <div class="image-overlay-header">
+      <span class="image-overlay-title">Image Preview</span>
+      <button class="image-overlay-close" type="button" aria-label="Close image">Close</button>
+    </div>
+    <div class="image-overlay-stage">
+      <img class="image-overlay-img" alt="marker image" draggable="false" />
+    </div>
+  </div>
+`
+document.body.appendChild(imageOverlay)
+
+const imageOverlayTitle = imageOverlay.querySelector('.image-overlay-title')
+const imageOverlayClose = imageOverlay.querySelector('.image-overlay-close')
+const imageOverlayStage = imageOverlay.querySelector('.image-overlay-stage')
+const imageOverlayImg = imageOverlay.querySelector('.image-overlay-img')
+
+const imageViewState = {
+  open: false,
+  scale: 1,
+  offsetX: 0,
+  offsetY: 0,
+  panPointerId: null,
+  panStartX: 0,
+  panStartY: 0,
+  panStartOffsetX: 0,
+  panStartOffsetY: 0,
+  pointers: new Map(),
+  pinchStartDistance: 0,
+  pinchStartScale: 1,
+  pinchStartOffsetX: 0,
+  pinchStartOffsetY: 0,
+  pinchStartCenterX: 0,
+  pinchStartCenterY: 0,
+}
 
 const controls = new OrbitControls(camera, renderer.domElement)
 controls.enableDamping = true
@@ -292,6 +369,9 @@ syncLookStateFromCamera()
 
 if (!isCoarsePointer) {
   renderer.domElement.addEventListener('pointerdown', (event) => {
+    if (imageViewState.open) {
+      return
+    }
     if (event.button === 2) {
       desktopLookState.dragging = true
       desktopLookState.pointerId = event.pointerId
@@ -316,6 +396,9 @@ if (!isCoarsePointer) {
   })
 
   renderer.domElement.addEventListener('pointermove', (event) => {
+    if (imageViewState.open) {
+      return
+    }
     if (desktopLookState.dragging && event.pointerId === desktopLookState.pointerId) {
       const dx = event.clientX - desktopLookState.lastX
       const dy = event.clientY - desktopLookState.lastY
@@ -383,6 +466,9 @@ if (!isCoarsePointer) {
   renderer.domElement.addEventListener(
     'wheel',
     (event) => {
+      if (imageViewState.open) {
+        return
+      }
       movement.forward.subVectors(controls.target, camera.position)
       if (movement.forward.lengthSq() < 1e-8) {
         movement.forward.set(0, 0, -1)
@@ -410,6 +496,17 @@ controls.addEventListener('end', () => {
 })
 
 window.addEventListener('keydown', (event) => {
+  if (event.code === 'Escape' && imageViewState.open) {
+    closeImageOverlay()
+    event.preventDefault()
+    return
+  }
+
+  if (imageViewState.open) {
+    event.preventDefault()
+    return
+  }
+
   if (event.code === 'KeyR') {
     resetView()
     event.preventDefault()
@@ -426,6 +523,10 @@ window.addEventListener('keydown', (event) => {
 })
 
 window.addEventListener('keyup', (event) => {
+  if (imageViewState.open) {
+    event.preventDefault()
+    return
+  }
   if (!(event.code in keyState)) {
     return
   }
@@ -442,6 +543,9 @@ window.addEventListener('blur', () => {
 })
 
 function setControlKey(code, pressed) {
+  if (imageViewState.open) {
+    return
+  }
   if (!(code in keyState)) {
     return
   }
@@ -614,21 +718,201 @@ function createMobileControls() {
   }
 
   let lastTapAt = 0
+  let lastTapX = 0
+  let lastTapY = 0
   renderer.domElement.addEventListener('pointerdown', (event) => {
+    if (imageViewState.open) {
+      return
+    }
     if (!event.isPrimary) {
       return
     }
     const now = Date.now()
-    if (now - lastTapAt < 280) {
-      resetView()
+    const dist = Math.hypot(event.clientX - lastTapX, event.clientY - lastTapY)
+    if (now - lastTapAt < MARKER_DOUBLE_TAP_MS && dist <= MARKER_DOUBLE_TAP_DISTANCE_PX) {
+      handleMarkerOpenAtPoint(event.clientX, event.clientY, true)
     }
     lastTapAt = now
+    lastTapX = event.clientX
+    lastTapY = event.clientY
   })
 
   document.body.appendChild(mobileControls)
 }
 
 createMobileControls()
+
+renderer.domElement.addEventListener('dblclick', (event) => {
+  handleMarkerOpenAtPoint(event.clientX, event.clientY, false)
+})
+
+imageOverlayClose?.addEventListener('click', () => {
+  closeImageOverlay()
+})
+
+imageOverlay.addEventListener('click', (event) => {
+  if (event.target === imageOverlay) {
+    closeImageOverlay()
+  }
+})
+
+function getStageRelativePoint(clientX, clientY) {
+  if (!imageOverlayStage) {
+    return { x: 0, y: 0 }
+  }
+  const rect = imageOverlayStage.getBoundingClientRect()
+  return {
+    x: clientX - (rect.left + rect.width * 0.5),
+    y: clientY - (rect.top + rect.height * 0.5),
+  }
+}
+
+function getPinchInfo() {
+  const points = Array.from(imageViewState.pointers.values())
+  if (points.length < 2) {
+    return null
+  }
+  const [a, b] = points
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  return {
+    distance: Math.hypot(dx, dy),
+    centerX: (a.x + b.x) * 0.5,
+    centerY: (a.y + b.y) * 0.5,
+  }
+}
+
+function beginPinch() {
+  const pinch = getPinchInfo()
+  if (!pinch) {
+    return
+  }
+  imageViewState.panPointerId = null
+  imageViewState.pinchStartDistance = pinch.distance
+  imageViewState.pinchStartScale = imageViewState.scale
+  imageViewState.pinchStartOffsetX = imageViewState.offsetX
+  imageViewState.pinchStartOffsetY = imageViewState.offsetY
+  imageViewState.pinchStartCenterX = pinch.centerX
+  imageViewState.pinchStartCenterY = pinch.centerY
+}
+
+imageOverlayStage?.addEventListener(
+  'wheel',
+  (event) => {
+    if (!imageViewState.open) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    const point = getStageRelativePoint(event.clientX, event.clientY)
+    const prevScale = imageViewState.scale
+    const nextScale = THREE.MathUtils.clamp(
+      prevScale * Math.exp(-event.deltaY * 0.0012),
+      IMAGE_VIEW_MIN_SCALE,
+      IMAGE_VIEW_MAX_SCALE
+    )
+    if (Math.abs(nextScale - prevScale) < 1e-4) {
+      return
+    }
+    imageViewState.offsetX =
+      point.x - ((point.x - imageViewState.offsetX) / prevScale) * nextScale
+    imageViewState.offsetY =
+      point.y - ((point.y - imageViewState.offsetY) / prevScale) * nextScale
+    imageViewState.scale = nextScale
+    applyImageViewTransform()
+  },
+  { passive: false }
+)
+
+for (const eventName of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
+  imageOverlayStage?.addEventListener(eventName, (event) => {
+    if (!imageViewState.open) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    const pointerEvent = event
+
+    if (eventName === 'pointerdown') {
+      imageOverlayStage.setPointerCapture(pointerEvent.pointerId)
+      imageViewState.pointers.set(pointerEvent.pointerId, {
+        x: pointerEvent.clientX,
+        y: pointerEvent.clientY,
+      })
+      if (imageViewState.pointers.size === 1) {
+        imageViewState.panPointerId = pointerEvent.pointerId
+        imageViewState.panStartX = pointerEvent.clientX
+        imageViewState.panStartY = pointerEvent.clientY
+        imageViewState.panStartOffsetX = imageViewState.offsetX
+        imageViewState.panStartOffsetY = imageViewState.offsetY
+      } else if (imageViewState.pointers.size >= 2) {
+        beginPinch()
+      }
+      return
+    }
+
+    if (!imageViewState.pointers.has(pointerEvent.pointerId)) {
+      return
+    }
+
+    if (eventName === 'pointermove') {
+      imageViewState.pointers.set(pointerEvent.pointerId, {
+        x: pointerEvent.clientX,
+        y: pointerEvent.clientY,
+      })
+
+      if (imageViewState.pointers.size >= 2) {
+        const pinch = getPinchInfo()
+        if (!pinch || imageViewState.pinchStartDistance <= 0) {
+          return
+        }
+        const pinchScale = pinch.distance / imageViewState.pinchStartDistance
+        imageViewState.scale = THREE.MathUtils.clamp(
+          imageViewState.pinchStartScale * pinchScale,
+          IMAGE_VIEW_MIN_SCALE,
+          IMAGE_VIEW_MAX_SCALE
+        )
+        imageViewState.offsetX =
+          imageViewState.pinchStartOffsetX + pinch.centerX - imageViewState.pinchStartCenterX
+        imageViewState.offsetY =
+          imageViewState.pinchStartOffsetY + pinch.centerY - imageViewState.pinchStartCenterY
+        applyImageViewTransform()
+        return
+      }
+
+      if (imageViewState.panPointerId === pointerEvent.pointerId) {
+        imageViewState.offsetX =
+          imageViewState.panStartOffsetX + (pointerEvent.clientX - imageViewState.panStartX)
+        imageViewState.offsetY =
+          imageViewState.panStartOffsetY + (pointerEvent.clientY - imageViewState.panStartY)
+        applyImageViewTransform()
+      }
+      return
+    }
+
+    imageViewState.pointers.delete(pointerEvent.pointerId)
+    if (imageOverlayStage.hasPointerCapture(pointerEvent.pointerId)) {
+      imageOverlayStage.releasePointerCapture(pointerEvent.pointerId)
+    }
+
+    if (imageViewState.pointers.size >= 2) {
+      beginPinch()
+      return
+    }
+
+    if (imageViewState.pointers.size === 1) {
+      const [remainingId, point] = imageViewState.pointers.entries().next().value
+      imageViewState.panPointerId = remainingId
+      imageViewState.panStartX = point.x
+      imageViewState.panStartY = point.y
+      imageViewState.panStartOffsetX = imageViewState.offsetX
+      imageViewState.panStartOffsetY = imageViewState.offsetY
+      return
+    }
+
+    imageViewState.panPointerId = null
+  })
+}
 
 const spark = new SparkRenderer({
   renderer,
@@ -650,6 +934,8 @@ poseMarkersRoot.rotation.x = SCENE_ALIGNMENT_ROTATION_X
 scene.add(poseMarkersRoot)
 
 function clearPoseMarkers() {
+  hideMarkerPreview()
+  markerListRegistry.clear()
   for (const child of [...poseMarkersRoot.children]) {
     child.traverse((node) => {
       if (node.geometry) {
@@ -666,6 +952,254 @@ function clearPoseMarkers() {
       }
     })
     poseMarkersRoot.remove(child)
+  }
+}
+
+const markerListItems = overlay.querySelector('.marker-list-items')
+const markerListEmpty = overlay.querySelector('.marker-list-empty')
+const loadChoice = overlay.querySelector('.menu-load-choice')
+const markerPreview = overlay.querySelector('.marker-preview-box')
+const markerPreviewImg = markerPreview.querySelector('.marker-preview-img')
+const markerRaycaster = new THREE.Raycaster()
+const markerPointerNdc = new THREE.Vector2()
+markerRaycaster.params.Line.threshold = 0.14
+const markerListRegistry = new Map()
+let markerListIdSeed = 0
+
+const imageStore = {
+  byFullName: new Map(),
+  byNoExtName: new Map(),
+  objectUrls: new Set(),
+}
+
+function getLowerBaseName(rawName) {
+  const normalized = rawName.replace(/\\/g, '/').toLowerCase()
+  const parts = normalized.split('/')
+  return parts[parts.length - 1] ?? ''
+}
+
+function removeFileExtension(name) {
+  return name.replace(/\.[^.]+$/, '')
+}
+
+function getFileExtension(fileName) {
+  const lastDot = fileName.lastIndexOf('.')
+  if (lastDot === -1) {
+    return ''
+  }
+  return fileName.slice(lastDot).toLowerCase()
+}
+
+function updateMarkerList(names) {
+  if (!markerListItems || !markerListEmpty) {
+    return
+  }
+
+  markerListRegistry.clear()
+  markerListItems.innerHTML = ''
+  if (names.length === 0) {
+    markerListEmpty.textContent = 'No markers'
+    markerListEmpty.classList.remove('is-hidden')
+    return
+  }
+
+  markerListEmpty.classList.add('is-hidden')
+  for (const marker of names) {
+    const markerId = `marker-${markerListIdSeed++}`
+    markerListRegistry.set(markerId, marker)
+    const item = document.createElement('li')
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'marker-list-link'
+    button.dataset.markerId = markerId
+    button.textContent = marker.label
+    item.appendChild(button)
+    markerListItems.appendChild(item)
+  }
+}
+
+function hideMarkerPreview() {
+  if (markerPreviewImg) {
+    markerPreviewImg.removeAttribute('src')
+  }
+  markerPreview.classList.remove('is-active')
+}
+
+function setMarkerPreviewReady(ready) {
+  markerPreview.classList.toggle('is-ready', ready)
+}
+
+function showMarkerPreview(markerData) {
+  if (!markerData?.imageEntry || !markerPreviewImg) {
+    hideMarkerPreview()
+    return
+  }
+  markerPreviewImg.src = markerData.imageEntry.objectUrl
+  markerPreview.classList.add('is-active')
+}
+
+function warpToMarker(markerData) {
+  if (!markerData) {
+    return
+  }
+  const markerObject = markerData.markerObject
+  const worldPosition = new THREE.Vector3()
+  const worldQuaternion = new THREE.Quaternion()
+
+  if (markerObject) {
+    markerObject.getWorldPosition(worldPosition)
+    markerObject.getWorldQuaternion(worldQuaternion)
+  } else if (markerData.position && markerData.quaternion) {
+    worldPosition.copy(markerData.position)
+    worldQuaternion.copy(markerData.quaternion)
+  } else {
+    return
+  }
+
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(worldQuaternion)
+  camera.position.copy(worldPosition).addScaledVector(forward, -MARKER_WARP_BACK_OFFSET)
+  controls.target
+    .copy(worldPosition)
+    .addScaledVector(forward, ORBIT_RADIUS - MARKER_WARP_BACK_OFFSET)
+  syncLookStateFromCamera()
+  controls.update()
+  requestCoarseLod(1.0)
+}
+
+function clearImageStore() {
+  for (const url of imageStore.objectUrls) {
+    URL.revokeObjectURL(url)
+  }
+  imageStore.objectUrls.clear()
+  imageStore.byFullName.clear()
+  imageStore.byNoExtName.clear()
+}
+
+function buildImageStore(imageFiles) {
+  clearImageStore()
+  for (const file of imageFiles) {
+    const fullName = getLowerBaseName(file.name)
+    const noExtName = removeFileExtension(fullName)
+    const objectUrl = URL.createObjectURL(file)
+    const entry = { name: file.name, objectUrl }
+    imageStore.objectUrls.add(objectUrl)
+    if (!imageStore.byFullName.has(fullName)) {
+      imageStore.byFullName.set(fullName, entry)
+    }
+    if (!imageStore.byNoExtName.has(noExtName)) {
+      imageStore.byNoExtName.set(noExtName, entry)
+    }
+  }
+}
+
+function getImageEntryForPoseName(poseName) {
+  if (imageStore.byFullName.size === 0) {
+    return null
+  }
+  const fullName = getLowerBaseName(poseName)
+  const noExtName = removeFileExtension(fullName)
+  return (
+    imageStore.byFullName.get(fullName) ?? imageStore.byNoExtName.get(noExtName) ?? null
+  )
+}
+
+function markerDataFromObject(object) {
+  let current = object
+  while (current) {
+    if (current.userData?.markerData) {
+      return current.userData.markerData
+    }
+    if (current === poseMarkersRoot) {
+      break
+    }
+    current = current.parent
+  }
+  return null
+}
+
+function getMarkerDataAtClientPoint(clientX, clientY) {
+  if (poseMarkersRoot.children.length === 0) {
+    return null
+  }
+  const rect = renderer.domElement.getBoundingClientRect()
+  markerPointerNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1
+  markerPointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1
+  markerRaycaster.setFromCamera(markerPointerNdc, camera)
+  const hits = markerRaycaster.intersectObjects(poseMarkersRoot.children, true)
+  for (const hit of hits) {
+    const markerData = markerDataFromObject(hit.object)
+    if (markerData) {
+      return markerData
+    }
+  }
+  return null
+}
+
+function applyImageViewTransform() {
+  if (!imageOverlayImg) {
+    return
+  }
+  imageOverlayImg.style.transform =
+    `translate(calc(-50% + ${imageViewState.offsetX}px), calc(-50% + ${imageViewState.offsetY}px)) ` +
+    `scale(${imageViewState.scale})`
+}
+
+function resetImageViewTransform() {
+  imageViewState.scale = 1
+  imageViewState.offsetX = 0
+  imageViewState.offsetY = 0
+  imageViewState.panPointerId = null
+  imageViewState.pointers.clear()
+  applyImageViewTransform()
+}
+
+function clearInputState() {
+  for (const code of Object.keys(keyState)) {
+    keyState[code] = false
+  }
+  touchInput.moveX = 0
+  touchInput.moveY = 0
+  touchInput.lookX = 0
+  touchInput.lookY = 0
+  inertiaState.moveInput.set(0, 0, 0)
+  inertiaState.externalVelocity.set(0, 0, 0)
+  inertiaState.lookVelocity.set(0, 0)
+}
+
+function openImageOverlay(markerData) {
+  if (!markerData?.imageEntry || !imageOverlayImg || !imageOverlayTitle) {
+    return
+  }
+  hideMarkerPreview()
+  imageOverlayImg.src = markerData.imageEntry.objectUrl
+  imageOverlayTitle.textContent = markerData.imageEntry.name
+  imageOverlay.classList.add('is-active')
+  imageViewState.open = true
+  resetImageViewTransform()
+  clearInputState()
+}
+
+function closeImageOverlay() {
+  if (!imageOverlayImg) {
+    return
+  }
+  imageOverlay.classList.remove('is-active')
+  imageViewState.open = false
+  imageOverlayImg.removeAttribute('src')
+  resetImageViewTransform()
+}
+
+function handleMarkerOpenAtPoint(clientX, clientY, resetOnMiss = false) {
+  if (imageViewState.open) {
+    return
+  }
+  const markerData = getMarkerDataAtClientPoint(clientX, clientY)
+  if (markerData?.imageEntry) {
+    openImageOverlay(markerData)
+    return
+  }
+  if (resetOnMiss) {
+    resetView()
   }
 }
 
@@ -698,60 +1232,96 @@ function parsePosesText(text) {
   return poses
 }
 
-function createPoseMarker(pose) {
+function createPoseMarker(pose, markerData) {
   const marker = new THREE.Group()
   marker.position.copy(pose.position)
   marker.quaternion.copy(pose.quaternion)
+  markerData.markerObject = marker
+  marker.userData.markerData = markerData
 
-  const body = new THREE.Mesh(
-    new THREE.SphereGeometry(0.075, 10, 10),
+  const size = 0.22
+  const length = 0.42
+  const apex = new THREE.Vector3(0, 0, 0)
+  const c1 = new THREE.Vector3(-size, size, -length)
+  const c2 = new THREE.Vector3(size, size, -length)
+  const c3 = new THREE.Vector3(size, -size, -length)
+  const c4 = new THREE.Vector3(-size, -size, -length)
+
+  const sideGeometry = new THREE.BufferGeometry()
+  sideGeometry.setAttribute(
+    'position',
+    new THREE.BufferAttribute(
+      new Float32Array([
+        apex.x, apex.y, apex.z, c1.x, c1.y, c1.z, c2.x, c2.y, c2.z,
+        apex.x, apex.y, apex.z, c2.x, c2.y, c2.z, c3.x, c3.y, c3.z,
+        apex.x, apex.y, apex.z, c3.x, c3.y, c3.z, c4.x, c4.y, c4.z,
+        apex.x, apex.y, apex.z, c4.x, c4.y, c4.z, c1.x, c1.y, c1.z,
+      ]),
+      3
+    )
+  )
+  sideGeometry.computeVertexNormals()
+
+  const sideMesh = new THREE.Mesh(
+    sideGeometry,
+    new THREE.MeshBasicMaterial({
+      color: 0x2ac3ff,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+      opacity: 0.28,
+      side: THREE.FrontSide,
+    })
+  )
+  sideMesh.renderOrder = 10
+  marker.add(sideMesh)
+
+  const frontFaceGeometry = new THREE.BufferGeometry()
+  frontFaceGeometry.setAttribute(
+    'position',
+    new THREE.BufferAttribute(
+      new Float32Array([
+        c1.x, c1.y, c1.z, c2.x, c2.y, c2.z, c3.x, c3.y, c3.z,
+        c1.x, c1.y, c1.z, c3.x, c3.y, c3.z, c4.x, c4.y, c4.z,
+      ]),
+      3
+    )
+  )
+  frontFaceGeometry.computeVertexNormals()
+  const frontFaceMesh = new THREE.Mesh(
+    frontFaceGeometry,
     new THREE.MeshBasicMaterial({
       color: 0xff8b3d,
       depthTest: false,
       depthWrite: false,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.78,
+      side: THREE.DoubleSide,
     })
   )
-  body.renderOrder = 10
-  marker.add(body)
+  frontFaceMesh.renderOrder = 10
+  marker.add(frontFaceMesh)
 
-  const forwardLine = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, 0, -0.45),
-    ]),
+  const edgeGeometry = new THREE.BufferGeometry().setFromPoints([
+    apex, c1, apex, c2, apex, c3, apex, c4, c1, c2, c2, c3, c3, c4, c4, c1,
+  ])
+  const edges = new THREE.LineSegments(
+    edgeGeometry,
     new THREE.LineBasicMaterial({
       color: 0x2ac3ff,
       depthTest: false,
       depthWrite: false,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.95,
     })
   )
-  forwardLine.renderOrder = 10
-  marker.add(forwardLine)
-
-  const upLine = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, 0.3, 0),
-    ]),
-    new THREE.LineBasicMaterial({
-      color: 0x7dff8a,
-      depthTest: false,
-      depthWrite: false,
-      transparent: true,
-      opacity: 0.9,
-    })
-  )
-  upLine.renderOrder = 10
-  marker.add(upLine)
+  edges.renderOrder = 11
+  marker.add(edges)
 
   return marker
 }
 
-async function loadPoseFile(file) {
+async function loadPoseFile(file, imageFiles = []) {
   lodStatus.classList.remove('is-hidden')
   lodStatus.textContent = `Loading poses: ${file.name}`
   try {
@@ -762,12 +1332,34 @@ async function loadPoseFile(file) {
       return
     }
 
-    clearPoseMarkers()
-    for (const pose of poses) {
-      poseMarkersRoot.add(createPoseMarker(pose))
-    }
+    buildImageStore(imageFiles)
+    const filteredPoses = poses.filter((pose) => {
+      if (imageStore.byFullName.size === 0) {
+        return true
+      }
+      return Boolean(getImageEntryForPoseName(pose.name))
+    })
+    const markerEntries = []
 
-    lodStatus.textContent = `Loaded poses: ${poses.length}`
+    clearPoseMarkers()
+    for (const pose of filteredPoses) {
+      const imageEntry = getImageEntryForPoseName(pose.name)
+      const markerData = {
+        poseName: pose.name,
+        imageEntry,
+        position: pose.position.clone(),
+        quaternion: pose.quaternion.clone(),
+        markerObject: null,
+      }
+      markerData.label = imageEntry?.name ?? getLowerBaseName(pose.name)
+      markerEntries.push(markerData)
+      poseMarkersRoot.add(
+        createPoseMarker(pose, markerData)
+      )
+    }
+    updateMarkerList(markerEntries)
+
+    lodStatus.textContent = `Loaded poses: ${filteredPoses.length}/${poses.length}`
     window.setTimeout(() => {
       lodStatus.classList.add('is-hidden')
     }, 1800)
@@ -823,32 +1415,129 @@ async function loadLocalSplat(file) {
   }
 }
 
+function classifyFiles(files) {
+  const splatFiles = []
+  const poseFiles = []
+  const imageFiles = []
+
+  for (const file of files) {
+    const ext = getFileExtension(file.name)
+    if (SPLAT_EXTENSIONS.has(ext)) {
+      splatFiles.push(file)
+    } else if (POSE_EXTENSIONS.has(ext)) {
+      poseFiles.push(file)
+    } else if (IMAGE_EXTENSIONS.has(ext)) {
+      imageFiles.push(file)
+    }
+  }
+  return { splatFiles, poseFiles, imageFiles }
+}
+
+async function loadSelection(fileList) {
+  const files = Array.from(fileList ?? [])
+  if (files.length === 0) {
+    return
+  }
+  closeImageOverlay()
+
+  const { splatFiles, poseFiles, imageFiles } = classifyFiles(files)
+  setMarkerPreviewReady(splatFiles.length > 0 || poseFiles.length > 0)
+  if (splatFiles.length > 0) {
+    await loadLocalSplat(splatFiles[0])
+  }
+  if (poseFiles.length > 0) {
+    await loadPoseFile(poseFiles[0], imageFiles)
+  }
+
+  if (splatFiles.length === 0 && poseFiles.length === 0) {
+    lodStatus.classList.remove('is-hidden')
+    lodStatus.textContent = 'No splat/pose file found in selection'
+  }
+}
+
 const menuLoadButton = overlay.querySelector('.menu-load-btn')
 menuLoadButton?.addEventListener('click', () => {
-  fileInput.value = ''
-  fileInput.click()
+  loadChoice?.classList.toggle('is-hidden')
 })
 
-const menuLoadPosesButton = overlay.querySelector('.menu-load-poses-btn')
-menuLoadPosesButton?.addEventListener('click', () => {
-  poseInput.value = ''
-  poseInput.click()
+for (const button of overlay.querySelectorAll('.menu-load-choice-btn')) {
+  button.addEventListener('click', () => {
+    const mode = button.getAttribute('data-load-mode')
+    loadChoice?.classList.add('is-hidden')
+    if (mode === 'folder') {
+      directoryInput.value = ''
+      directoryInput.click()
+      return
+    }
+    fileInput.value = ''
+    fileInput.click()
+  })
+}
+
+document.addEventListener('click', (event) => {
+  if (!loadChoice || !menuLoadButton) {
+    return
+  }
+  const target = event.target
+  if (!(target instanceof Node)) {
+    return
+  }
+  if (loadChoice.contains(target) || menuLoadButton.contains(target)) {
+    return
+  }
+  loadChoice.classList.add('is-hidden')
+})
+
+markerListItems?.addEventListener('click', (event) => {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+  const button = target.closest('.marker-list-link')
+  if (!(button instanceof HTMLElement)) {
+    return
+  }
+  const markerId = button.dataset.markerId
+  if (!markerId) {
+    return
+  }
+  const markerData = markerListRegistry.get(markerId)
+  if (!markerData) {
+    return
+  }
+  hideMarkerPreview()
+  warpToMarker(markerData)
+})
+
+markerListItems?.addEventListener('mousemove', (event) => {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+  const button = target.closest('.marker-list-link')
+  if (!(button instanceof HTMLElement)) {
+    hideMarkerPreview()
+    return
+  }
+  const markerId = button.dataset.markerId
+  if (!markerId) {
+    hideMarkerPreview()
+    return
+  }
+  const markerData = markerListRegistry.get(markerId)
+  showMarkerPreview(markerData)
+})
+
+markerListItems?.addEventListener('mouseleave', () => {
+  hideMarkerPreview()
 })
 
 fileInput.addEventListener('change', async () => {
-  const file = fileInput.files?.[0]
-  if (!file) {
-    return
-  }
-  await loadLocalSplat(file)
+  await loadSelection(fileInput.files)
 })
 
-poseInput.addEventListener('change', async () => {
-  const file = poseInput.files?.[0]
-  if (!file) {
-    return
-  }
-  await loadPoseFile(file)
+directoryInput.addEventListener('change', async () => {
+  await loadSelection(directoryInput.files)
 })
 
 function hasGeneratedLod(mesh) {
@@ -915,6 +1604,9 @@ window.addEventListener('resize', () => {
 })
 
 function updateLook(deltaTime) {
+  if (imageViewState.open) {
+    return
+  }
   if (isCoarsePointer) {
     if (touchInput.lookX === 0 && touchInput.lookY === 0) {
       return
@@ -956,6 +1648,9 @@ function updateLook(deltaTime) {
 }
 
 function updateMovement(deltaTime) {
+  if (imageViewState.open) {
+    return
+  }
   let forwardInput = -touchInput.moveY
   let rightInput = touchInput.moveX
   let verticalInput = 0
