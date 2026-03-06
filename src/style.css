@@ -255,14 +255,17 @@ canvas {
   height: 50px;
   justify-self: center;
   border-radius: 10px;
+  clip-path: path(
+    'M50 3 C55 3 58 6 61 11 L94 88 C96 93 93 97 88 97 L12 97 C7 97 4 93 6 88 L39 11 C42 6 45 3 50 3 Z'
+  );
 }
 
 .mobile-tri-up {
-  clip-path: polygon(50% 3%, 56% 10%, 96% 96%, 4% 96%, 44% 10%);
+  transform: none;
 }
 
 .mobile-tri-down {
-  clip-path: polygon(4% 4%, 96% 4%, 56% 90%, 50% 97%, 44% 90%);
+  transform: rotate(180deg);
 }
 
 @media (pointer: coarse) {
