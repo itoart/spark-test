@@ -271,15 +271,12 @@ canvas {
   content: '';
   position: absolute;
   inset: 0;
-  background: var(--mobile-overlay-bg);
-  -webkit-mask-image: url('/ui/arrow.png');
-  -webkit-mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-image: url('/ui/arrow.png');
-  mask-size: contain;
-  mask-repeat: no-repeat;
-  mask-position: center;
+  background-image: url('/ui/arrow.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.3;
+  mix-blend-mode: multiply;
 }
 
 .mobile-tri-down::before {
@@ -287,7 +284,7 @@ canvas {
 }
 
 .mobile-tri.is-active::before {
-  background: rgba(255, 255, 255, 0.24);
+  opacity: 0.45;
 }
 
 @media (pointer: coarse) {
