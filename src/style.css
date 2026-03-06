@@ -281,7 +281,6 @@ canvas {
   height: 100%;
   object-fit: contain;
   opacity: 0.3;
-  mix-blend-mode: multiply;
   pointer-events: none;
 }
 

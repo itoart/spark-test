@@ -495,6 +495,42 @@ function bindVirtualStick({ root, base, stick, setX, setY }) {
   base.addEventListener('pointercancel', resetStick)
 }
 
+function createArrowOverlayDataUrl(imageUrl) {
+  return new Promise((resolve) => {
+    const image = new Image()
+    image.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = image.naturalWidth || image.width
+      canvas.height = image.naturalHeight || image.height
+      const context = canvas.getContext('2d')
+      if (!context) {
+        resolve(imageUrl)
+        return
+      }
+
+      context.drawImage(image, 0, 0)
+      const imgData = context.getImageData(0, 0, canvas.width, canvas.height)
+      const data = imgData.data
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i]
+        const g = data[i + 1]
+        const b = data[i + 2]
+        const luminance = (r + g + b) / 3
+        // white -> transparent, black -> opaque black
+        data[i] = 0
+        data[i + 1] = 0
+        data[i + 2] = 0
+        data[i + 3] = 255 - luminance
+      }
+
+      context.putImageData(imgData, 0, 0)
+      resolve(canvas.toDataURL('image/png'))
+    }
+    image.onerror = () => resolve(imageUrl)
+    image.src = imageUrl
+  })
+}
+
 function createMobileControls() {
   if (!isCoarsePointer) {
     return
@@ -553,6 +589,12 @@ function createMobileControls() {
     setY: (y) => {
       touchInput.lookY = y
     },
+  })
+
+  createArrowOverlayDataUrl(MOBILE_ARROW_IMAGE_URL).then((resolvedUrl) => {
+    for (const icon of mobileControls.querySelectorAll('.mobile-tri-icon')) {
+      icon.src = resolvedUrl
+    }
   })
 
   const release = (button) => {
