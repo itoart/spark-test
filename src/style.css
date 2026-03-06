@@ -259,6 +259,11 @@ canvas {
   position: relative;
 }
 
+.mobile-controls button.mobile-tri {
+  border: none;
+  background: transparent;
+}
+
 .mobile-tri-up {
   transform: none;
 }
@@ -276,7 +281,7 @@ canvas {
   background-repeat: no-repeat;
   background-position: center;
   opacity: 0.3;
-  mix-blend-mode: multiply;
+  mix-blend-mode: darken;
 }
 
 .mobile-tri-down::before {
