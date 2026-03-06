@@ -173,21 +173,6 @@ canvas {
   pointer-events: auto;
 }
 
-.mobile-look-group {
-  display: flex;
-  align-items: flex-end;
-  pointer-events: auto;
-  margin-right: 0;
-}
-
-.mobile-look-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  transform: none;
-}
-
 .mobile-look {
   position: relative;
   display: flex;
@@ -240,27 +225,40 @@ canvas {
 
 .mobile-vertical {
   display: grid;
-  grid-template-columns: 98px;
-  gap: 8px;
-  margin-right: -14px;
-  margin-bottom: 6px;
+  grid-template-columns: 66px;
+  gap: 16px;
+  margin-bottom: 16px;
   pointer-events: auto;
 }
 
 .mobile-controls button {
   border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 18px;
   background: var(--mobile-overlay-bg);
   color: inherit;
-  font-size: 0.84rem;
+  font-size: 1.12rem;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  padding: 12px 0;
+  line-height: 1;
+  padding: 0;
   touch-action: none;
 }
 
 .mobile-controls button.is-active {
   background: rgba(255, 255, 255, 0.24);
+}
+
+.mobile-tri {
+  width: 56px;
+  height: 46px;
+  justify-self: center;
+  border-radius: 10px;
+}
+
+.mobile-tri-up {
+  clip-path: polygon(50% 4%, 96% 96%, 4% 96%);
+}
+
+.mobile-tri-down {
+  clip-path: polygon(4% 4%, 96% 4%, 50% 96%);
 }
 
 @media (pointer: coarse) {
@@ -289,12 +287,13 @@ canvas {
   }
 
   .mobile-vertical {
-    grid-template-columns: 86px;
-    margin-right: -10px;
-    margin-bottom: 4px;
+    grid-template-columns: 56px;
+    gap: 14px;
+    margin-bottom: 12px;
   }
 
-  .mobile-look-stack {
-    transform: none;
+  .mobile-tri {
+    width: 48px;
+    height: 40px;
   }
 }

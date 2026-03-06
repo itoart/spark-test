@@ -508,18 +508,14 @@ function createMobileControls() {
         <div class="mobile-stick"></div>
       </div>
     </div>
-    <div class="mobile-look-group">
-      <div class="mobile-look-stack">
-        <div class="mobile-vertical">
-          <button data-key="KeyE">UP</button>
-          <button data-key="KeyQ">DOWN</button>
-        </div>
-        <div class="mobile-look">
-          <div class="mobile-stick-label">LOOK</div>
-          <div class="mobile-stick-base" data-stick="look">
-            <div class="mobile-stick"></div>
-          </div>
-        </div>
+    <div class="mobile-vertical">
+      <button class="mobile-tri mobile-tri-up" data-key="KeyE" aria-label="UP">▲</button>
+      <button class="mobile-tri mobile-tri-down" data-key="KeyQ" aria-label="DOWN">▼</button>
+    </div>
+    <div class="mobile-look">
+      <div class="mobile-stick-label">LOOK</div>
+      <div class="mobile-stick-base" data-stick="look">
+        <div class="mobile-stick"></div>
       </div>
     </div>
   `
