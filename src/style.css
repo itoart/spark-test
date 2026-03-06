@@ -258,11 +258,11 @@ canvas {
 }
 
 .mobile-tri-up {
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  clip-path: polygon(50% 3%, 56% 10%, 96% 96%, 4% 96%, 44% 10%);
 }
 
 .mobile-tri-down {
-  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  clip-path: polygon(4% 4%, 96% 4%, 56% 90%, 50% 97%, 44% 90%);
 }
 
 @media (pointer: coarse) {
