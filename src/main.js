@@ -511,10 +511,10 @@ function createMobileControls() {
     </div>
     <div class="mobile-vertical">
       <button class="mobile-tri mobile-tri-up" data-key="KeyE" aria-label="UP">
-        <span class="mobile-tri-icon" aria-hidden="true"></span>
+        <img class="mobile-tri-icon" src="${MOBILE_ARROW_IMAGE_URL}" alt="" aria-hidden="true" />
       </button>
       <button class="mobile-tri mobile-tri-down" data-key="KeyQ" aria-label="DOWN">
-        <span class="mobile-tri-icon" aria-hidden="true"></span>
+        <img class="mobile-tri-icon" src="${MOBILE_ARROW_IMAGE_URL}" alt="" aria-hidden="true" />
       </button>
     </div>
     <div class="mobile-look">
@@ -554,10 +554,6 @@ function createMobileControls() {
       touchInput.lookY = y
     },
   })
-
-  for (const icon of mobileControls.querySelectorAll('.mobile-tri-icon')) {
-    icon.style.backgroundImage = `url('${MOBILE_ARROW_IMAGE_URL}')`
-  }
 
   const release = (button) => {
     button.classList.remove('is-active')

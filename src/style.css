@@ -279,11 +279,10 @@ canvas {
   display: block;
   width: 100%;
   height: 100%;
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-  opacity: 1;
+  object-fit: contain;
+  opacity: 0.3;
   mix-blend-mode: multiply;
+  pointer-events: none;
 }
 
 .mobile-tri-down .mobile-tri-icon {
@@ -291,7 +290,7 @@ canvas {
 }
 
 .mobile-tri.is-active .mobile-tri-icon {
-  opacity: 1;
+  opacity: 0.45;
 }
 
 @media (pointer: coarse) {
