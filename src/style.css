@@ -257,6 +257,9 @@ canvas {
   border: none;
   background: transparent;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .mobile-controls button.mobile-tri {
@@ -272,23 +275,23 @@ canvas {
   transform: none;
 }
 
-.mobile-tri::before {
-  content: '';
-  position: absolute;
-  inset: 0;
+.mobile-tri-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
   background-image: url('/ui/arrow.png');
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  opacity: 0.95;
+  opacity: 1;
   mix-blend-mode: multiply;
 }
 
-.mobile-tri-down::before {
+.mobile-tri-down .mobile-tri-icon {
   transform: rotate(180deg);
 }
 
-.mobile-tri.is-active::before {
+.mobile-tri.is-active .mobile-tri-icon {
   opacity: 1;
 }
 
