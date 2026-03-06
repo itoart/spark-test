@@ -252,37 +252,42 @@ canvas {
 
 .mobile-tri {
   width: 62px;
-  height: 50px;
+  height: 55px;
   justify-self: center;
-  border-radius: 10px;
+  border: none;
+  background: transparent;
+  position: relative;
 }
 
 .mobile-tri-up {
-  clip-path: polygon(
-    50% 2%,
-    56% 5%,
-    62% 11%,
-    94% 92%,
-    88% 98%,
-    12% 98%,
-    6% 92%,
-    38% 11%,
-    44% 5%
-  );
+  transform: none;
 }
 
 .mobile-tri-down {
-  clip-path: polygon(
-    12% 2%,
-    88% 2%,
-    94% 8%,
-    62% 89%,
-    56% 95%,
-    50% 98%,
-    44% 95%,
-    38% 89%,
-    6% 8%
-  );
+  transform: none;
+}
+
+.mobile-tri::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--mobile-overlay-bg);
+  -webkit-mask-image: url('/ui/arrow.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: url('/ui/arrow.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+
+.mobile-tri-down::before {
+  transform: rotate(180deg);
+}
+
+.mobile-tri.is-active::before {
+  background: rgba(255, 255, 255, 0.24);
 }
 
 @media (pointer: coarse) {
@@ -318,6 +323,6 @@ canvas {
 
   .mobile-tri {
     width: 53px;
-    height: 43px;
+    height: 47px;
   }
 }
