@@ -1543,6 +1543,25 @@ markerListItems?.addEventListener('click', (event) => {
     return
   }
   showMarkerPreview(markerData, { pinned: true })
+})
+
+markerListItems?.addEventListener('dblclick', (event) => {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+  const button = target.closest('.marker-list-link')
+  if (!(button instanceof HTMLElement)) {
+    return
+  }
+  const markerId = button.dataset.markerId
+  if (!markerId) {
+    return
+  }
+  const markerData = markerListRegistry.get(markerId)
+  if (!markerData) {
+    return
+  }
   warpToMarker(markerData)
 })
 
@@ -1574,6 +1593,52 @@ markerListItems?.addEventListener('mouseleave', () => {
     hideMarkerPreview()
   }
 })
+
+const markerListTapState = {
+  lastTapAt: 0,
+  lastTapMarkerId: '',
+}
+
+markerListItems?.addEventListener(
+  'touchend',
+  (event) => {
+    if (event.changedTouches.length !== 1) {
+      return
+    }
+    const target = event.target
+    if (!(target instanceof HTMLElement)) {
+      return
+    }
+    const button = target.closest('.marker-list-link')
+    if (!(button instanceof HTMLElement)) {
+      return
+    }
+    const markerId = button.dataset.markerId
+    if (!markerId) {
+      return
+    }
+
+    const now = Date.now()
+    const isDoubleTap =
+      markerId === markerListTapState.lastTapMarkerId &&
+      now - markerListTapState.lastTapAt < 320
+
+    markerListTapState.lastTapAt = now
+    markerListTapState.lastTapMarkerId = markerId
+
+    if (!isDoubleTap) {
+      return
+    }
+
+    const markerData = markerListRegistry.get(markerId)
+    if (!markerData) {
+      return
+    }
+    event.preventDefault()
+    warpToMarker(markerData)
+  },
+  { passive: false }
+)
 
 document.addEventListener('pointerdown', (event) => {
   if (!markerPreviewPinned) {
