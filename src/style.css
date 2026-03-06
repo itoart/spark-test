@@ -225,10 +225,13 @@ canvas {
 }
 
 .mobile-vertical {
-  display: grid;
-  grid-template-columns: 66px;
-  gap: 14px;
-  margin-bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  width: 66px;
+  height: 172px;
+  margin-bottom: 0;
   pointer-events: auto;
 }
 
@@ -255,11 +258,11 @@ canvas {
 }
 
 .mobile-tri-up {
-  clip-path: polygon(50% 4%, 96% 96%, 4% 96%);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 
 .mobile-tri-down {
-  clip-path: polygon(4% 4%, 96% 4%, 50% 96%);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
 }
 
 @media (pointer: coarse) {
@@ -288,9 +291,9 @@ canvas {
   }
 
   .mobile-vertical {
-    grid-template-columns: 56px;
-    gap: 12px;
-    margin-bottom: 18px;
+    width: 56px;
+    height: 146px;
+    margin-bottom: 0;
   }
 
   .mobile-tri {
