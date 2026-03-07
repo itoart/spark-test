@@ -14,7 +14,6 @@ const LOOK_INERTIA_DAMPING = 10
 const LOOK_DRAG_IMPULSE = 0.022
 const MIDDLE_DRAG_IMPULSE = 0.18
 const WHEEL_IMPULSE = 0.08
-const MOBILE_TARGET_FPS = 30
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
 const cpuCores = navigator.hardwareConcurrency ?? 4
 const deviceMemoryGb = navigator.deviceMemory ?? 4
@@ -22,7 +21,6 @@ const isLowEndDevice = cpuCores <= 6 || deviceMemoryGb <= 4
 const isAppleMobileLike =
   /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-const MAX_PIXEL_RATIO = isLowEndDevice ? 1.15 : 1.5
 const LOD_SCALE_COARSE = isCoarsePointer
   ? isAppleMobileLike ? 0.9 : 0.8
   : isLowEndDevice ? 0.75 : 0.65
@@ -33,7 +31,7 @@ const LOD_SCALE_FINE = 5.0
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = 0.35
-const LOD_TARGET_FPS = isCoarsePointer ? MOBILE_TARGET_FPS : 60
+const LOD_TARGET_FPS = isCoarsePointer ? 30 : 60
 const LOD_TARGET_FRAME_MS = 1000 / LOD_TARGET_FPS
 const LOD_FRAME_EMA_ALPHA = 0.2
 const LOD_SLOW_FRAME_MULTIPLIER = isCoarsePointer ? 1.45 : 1.08
@@ -100,7 +98,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: false })
 renderer.setClearColor('#000000', 1)
 
 function updateRendererViewport() {
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
+  renderer.setPixelRatio(window.devicePixelRatio)
   renderer.setSize(window.innerWidth, window.innerHeight)
 }
 
@@ -374,7 +372,6 @@ const lodPerfState = {
 }
 
 const clock = new THREE.Clock()
-let lastFrameTimeSeconds = 0
 
 function syncLookStateFromCamera() {
   const direction = new THREE.Vector3()
@@ -2011,15 +2008,6 @@ function updateAdaptiveLod(deltaTime) {
 
 function animate(timestampMs = 0) {
   requestAnimationFrame(animate)
-  const frameTimeSeconds = timestampMs * 0.001
-  if (
-    isCoarsePointer &&
-    frameTimeSeconds - lastFrameTimeSeconds < 1 / MOBILE_TARGET_FPS
-  ) {
-    return
-  }
-
-  lastFrameTimeSeconds = frameTimeSeconds
   const deltaTime = Math.min(clock.getDelta(), 0.05)
   skyDome.position.copy(camera.position)
   updateLook(deltaTime)
