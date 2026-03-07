@@ -1492,7 +1492,9 @@ async function loadLocalSplat(file) {
     try {
       nextSplat = await createInitializedSplatMesh(fileBytes, file.name, loadedWithLod)
     } catch (error) {
-      if (!loadedWithLod || !shouldRetryWithoutLod(error)) {
+      const canFallbackToSafeMode =
+        loadedWithLod && (isAppleMobileLike || shouldRetryWithoutLod(error))
+      if (!canFallbackToSafeMode) {
         throw error
       }
       console.warn('LoD init failed, retrying local load without LoD', error)
