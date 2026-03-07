@@ -27,7 +27,7 @@ const LOD_SCALE_COARSE = isCoarsePointer
 const LOD_SCALE_MOTION = isCoarsePointer
   ? isAppleMobileLike ? 0.95 : 0.9
   : isLowEndDevice ? 1.05 : 0.95
-const LOD_SCALE_FINE = 10.0
+const LOD_SCALE_FINE = 6.0
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = 0.35
@@ -45,6 +45,8 @@ const LOD_QUALITY_FLOOR = isCoarsePointer
   : 0
 const LOD_MOTION_LERP_ALPHA = 0.35
 const LOD_SETTLED_LERP_ALPHA = 0.12
+const IOS_SPLAT_INIT_RETRIES = isAppleMobileLike ? 1 : 0
+const IOS_SPLAT_INIT_RETRY_DELAY_MS = 140
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 const ORBIT_RADIUS = INITIAL_CAMERA_POSITION.distanceTo(INITIAL_TARGET)
@@ -419,6 +421,12 @@ function requestCoarseLod(seconds = LOD_SETTLE_DELAY_SECONDS) {
     lodRampState.forceCoarseUntil,
     nowSeconds() + seconds
   )
+}
+
+function waitMs(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
 }
 
 function clampLodQuality(value) {
@@ -1442,16 +1450,6 @@ async function loadPoseFile(file, imageFiles = []) {
   }
 }
 
-function shouldRetryWithoutLod(error) {
-  const message = error instanceof Error ? error.message : String(error)
-  const lower = message.toLowerCase()
-  return (
-    lower.includes('wasm') ||
-    lower.includes('unreachable code should not be executed') ||
-    lower.includes('chunkd')
-  )
-}
-
 async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
   const mesh = new SplatMesh({
     fileBytes,
@@ -1470,6 +1468,21 @@ async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
   }
 }
 
+async function createInitializedSplatMeshWithRetry(fileBytes, fileName, useLod) {
+  let lastError = null
+  for (let attempt = 0; attempt <= IOS_SPLAT_INIT_RETRIES; attempt += 1) {
+    try {
+      return await createInitializedSplatMesh(fileBytes, fileName, useLod)
+    } catch (error) {
+      lastError = error
+      if (attempt < IOS_SPLAT_INIT_RETRIES) {
+        await waitMs(IOS_SPLAT_INIT_RETRY_DELAY_MS * (attempt + 1))
+      }
+    }
+  }
+  throw lastError
+}
+
 async function loadLocalSplat(file) {
   const loadingText = loadingOverlay.querySelector('.loading-text')
   if (loadingText) {
@@ -1483,19 +1496,16 @@ async function loadLocalSplat(file) {
     const fileBytes = new Uint8Array(await file.arrayBuffer())
     let nextSplat = null
     let loadedWithLod = true
-
     try {
-      nextSplat = await createInitializedSplatMesh(fileBytes, file.name, loadedWithLod)
+      nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, true)
     } catch (error) {
-      const canFallbackToSafeMode =
-        loadedWithLod && (isAppleMobileLike || shouldRetryWithoutLod(error))
-      if (!canFallbackToSafeMode) {
+      if (!isAppleMobileLike) {
         throw error
       }
-      console.warn('LoD init failed, retrying local load without LoD', error)
-      lodStatus.textContent = 'LoD init failed on this browser, retrying safe mode...'
+      console.warn('LoD init unstable on iPad, retrying stable mode', error)
+      lodStatus.textContent = 'Retrying stable iPad mode...'
       loadedWithLod = false
-      nextSplat = await createInitializedSplatMesh(fileBytes, file.name, false)
+      nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, false)
     }
 
     nextSplat.rotation.x = SCENE_ALIGNMENT_ROTATION_X
@@ -1512,7 +1522,7 @@ async function loadLocalSplat(file) {
       await initializeLod(activeSplat)
     } else {
       lodRampState.active = false
-      lodStatus.textContent = `Loaded (safe mode): ${file.name}`
+      lodStatus.textContent = `Loaded (stable mode): ${file.name}`
     }
     resetView()
     if (loadedWithLod) {
@@ -1820,7 +1830,6 @@ async function initializeLod(targetSplat = activeSplat) {
     console.error('Failed to initialize LoD tree', error)
     const reason = error instanceof Error ? error.message : String(error)
     lodStatus.textContent = `LoD disabled: ${reason.slice(0, 64)}`
-    targetSplat.enableLod = false
     lodRampState.active = false
   }
 }
