@@ -18,12 +18,11 @@ const MOBILE_TARGET_FPS = 30
 const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
 const cpuCores = navigator.hardwareConcurrency ?? 4
 const deviceMemoryGb = navigator.deviceMemory ?? 4
-const isLowEndDevice = isCoarsePointer || cpuCores <= 6 || deviceMemoryGb <= 4
-const isDesktopProfile = !isCoarsePointer
-const ENABLE_LOD = isDesktopProfile
-const MAX_PIXEL_RATIO = isCoarsePointer ? 0.75 : isLowEndDevice ? 1.15 : 1.5
-const LOD_SCALE_COARSE = isCoarsePointer ? 1.2 : isLowEndDevice ? 0.75 : 0.65
-const LOD_SCALE_FINE = isCoarsePointer ? 2.0 : isLowEndDevice ? 1.45 : 1.9
+const isLowEndDevice = cpuCores <= 6 || deviceMemoryGb <= 4
+const ENABLE_LOD = true
+const MAX_PIXEL_RATIO = isLowEndDevice ? 1.15 : 1.5
+const LOD_SCALE_COARSE = isCoarsePointer ? 0.55 : isLowEndDevice ? 0.75 : 0.65
+const LOD_SCALE_FINE = isCoarsePointer ? 1.15 : isLowEndDevice ? 1.45 : 1.9
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = 0.35
@@ -953,13 +952,13 @@ const spark = new SparkRenderer({
   renderer,
   enableLod: ENABLE_LOD,
   maxStdDev: Math.sqrt(isCoarsePointer ? 4 : 5),
-  maxPixelRadius: isCoarsePointer ? 160 : 256,
+  maxPixelRadius: isCoarsePointer ? 128 : 256,
   minPixelRadius: isCoarsePointer ? 0.6 : 0.4,
   minAlpha: isCoarsePointer ? 0.01 : 0.006,
-  minSortIntervalMs: isLowEndDevice ? 24 : 12,
+  minSortIntervalMs: isCoarsePointer ? 32 : isLowEndDevice ? 24 : 12,
   lodSplatScale: LOD_SCALE_COARSE,
   behindFoveate: 1.0,
-  numLodFetchers: isCoarsePointer ? 2 : 4,
+  numLodFetchers: isCoarsePointer ? 1 : 4,
 })
 scene.add(spark)
 
