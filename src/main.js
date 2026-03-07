@@ -27,7 +27,7 @@ const LOD_SCALE_COARSE = isCoarsePointer
 const LOD_SCALE_MOTION = isCoarsePointer
   ? isAppleMobileLike ? 0.95 : 0.9
   : isLowEndDevice ? 1.05 : 0.95
-const LOD_SCALE_FINE = 5.0
+const LOD_SCALE_FINE = 10.0
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = 0.35
