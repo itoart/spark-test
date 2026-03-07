@@ -27,10 +27,10 @@ const LOD_SCALE_COARSE = isCoarsePointer
   ? isAppleMobileLike ? 0.9 : 0.8
   : isLowEndDevice ? 0.75 : 0.65
 const LOD_SCALE_MOTION = isCoarsePointer
-  ? isAppleMobileLike ? 1.35 : 1.2
+  ? isAppleMobileLike ? 1.2 : 1.1
   : isLowEndDevice ? 1.05 : 0.95
 const LOD_SCALE_FINE = isCoarsePointer
-  ? isAppleMobileLike ? 1.9 : 1.65
+  ? isAppleMobileLike ? 2.35 : 2.0
   : isLowEndDevice ? 1.45 : 1.9
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
@@ -38,14 +38,14 @@ const LOD_SETTLE_DELAY_SECONDS = 0.35
 const LOD_TARGET_FPS = isCoarsePointer ? MOBILE_TARGET_FPS : 60
 const LOD_TARGET_FRAME_MS = 1000 / LOD_TARGET_FPS
 const LOD_FRAME_EMA_ALPHA = 0.2
-const LOD_SLOW_FRAME_MULTIPLIER = isCoarsePointer ? 1.2 : 1.08
-const LOD_FAST_FRAME_MULTIPLIER = isCoarsePointer ? 0.85 : 0.9
-const LOD_QUALITY_DROP_PER_SEC = isCoarsePointer ? 0.35 : 0.65
-const LOD_QUALITY_RISE_PER_SEC = isCoarsePointer ? 0.5 : 0.35
+const LOD_SLOW_FRAME_MULTIPLIER = isCoarsePointer ? 1.45 : 1.08
+const LOD_FAST_FRAME_MULTIPLIER = isCoarsePointer ? 1.02 : 0.9
+const LOD_QUALITY_DROP_PER_SEC = isCoarsePointer ? 0.25 : 0.65
+const LOD_QUALITY_RISE_PER_SEC = isCoarsePointer ? 0.8 : 0.35
 const LOD_QUALITY_DROP_OVERSHOOT_CAP = 2
 const LOD_QUALITY_RISE_HEADROOM_CAP = 1.6
 const LOD_QUALITY_FLOOR = isCoarsePointer
-  ? isAppleMobileLike ? 0.72 : 0.55
+  ? isAppleMobileLike ? 0.6 : 0.45
   : 0
 const LOD_MOTION_LERP_ALPHA = 0.35
 const LOD_SETTLED_LERP_ALPHA = 0.12
@@ -992,13 +992,13 @@ const spark = new SparkRenderer({
   renderer,
   enableLod: true,
   maxStdDev: Math.sqrt(isCoarsePointer ? 4 : 5),
-  maxPixelRadius: isCoarsePointer ? (isAppleMobileLike ? 224 : 176) : 256,
+  maxPixelRadius: isCoarsePointer ? (isAppleMobileLike ? 256 : 224) : 256,
   minPixelRadius: isCoarsePointer ? 0.6 : 0.4,
   minAlpha: isCoarsePointer ? 0.01 : 0.006,
-  minSortIntervalMs: isCoarsePointer ? (isAppleMobileLike ? 16 : 20) : isLowEndDevice ? 24 : 12,
+  minSortIntervalMs: isCoarsePointer ? (isAppleMobileLike ? 12 : 16) : isLowEndDevice ? 24 : 12,
   lodSplatScale: LOD_SCALE_COARSE,
   behindFoveate: 1.0,
-  numLodFetchers: isCoarsePointer ? (isAppleMobileLike ? 3 : 2) : 4,
+  numLodFetchers: isCoarsePointer ? (isAppleMobileLike ? 4 : 3) : 4,
 })
 scene.add(spark)
 
