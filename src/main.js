@@ -77,6 +77,7 @@ const isAppleMobileLike =
   /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 const INPUT_ACCEPT = isAppleMobileLike ? '*/*' : DEFAULT_INPUT_ACCEPT
+const PREFER_NON_LOD_LOCAL_LOAD = isAppleMobileLike
 
 const scene = new THREE.Scene()
 scene.background = null
@@ -1438,6 +1439,34 @@ async function loadPoseFile(file, imageFiles = []) {
   }
 }
 
+function shouldRetryWithoutLod(error) {
+  const message = error instanceof Error ? error.message : String(error)
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('wasm') ||
+    lower.includes('unreachable code should not be executed') ||
+    lower.includes('chunkd')
+  )
+}
+
+async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
+  const mesh = new SplatMesh({
+    fileBytes,
+    fileName,
+    lod: useLod,
+    nonLod: true,
+    enableLod: false,
+    behindFoveate: 1.0,
+  })
+  try {
+    await mesh.initialized
+    return mesh
+  } catch (error) {
+    mesh.dispose?.()
+    throw error
+  }
+}
+
 async function loadLocalSplat(file) {
   const loadingText = loadingOverlay.querySelector('.loading-text')
   if (loadingText) {
@@ -1449,17 +1478,23 @@ async function loadLocalSplat(file) {
 
   try {
     const fileBytes = new Uint8Array(await file.arrayBuffer())
-    const nextSplat = new SplatMesh({
-      fileBytes,
-      fileName: file.name,
-      lod: true,
-      nonLod: true,
-      enableLod: false,
-      behindFoveate: 1.0,
-    })
+    let nextSplat = null
+    let loadedWithLod = !PREFER_NON_LOD_LOCAL_LOAD
+
+    try {
+      nextSplat = await createInitializedSplatMesh(fileBytes, file.name, loadedWithLod)
+    } catch (error) {
+      if (!loadedWithLod || !shouldRetryWithoutLod(error)) {
+        throw error
+      }
+      console.warn('LoD init failed, retrying local load without LoD', error)
+      lodStatus.textContent = 'LoD init failed on this browser, retrying safe mode...'
+      loadedWithLod = false
+      nextSplat = await createInitializedSplatMesh(fileBytes, file.name, false)
+    }
+
     nextSplat.rotation.x = SCENE_ALIGNMENT_ROTATION_X
     scene.add(nextSplat)
-    await nextSplat.initialized
 
     const prevSplat = activeSplat
     activeSplat = nextSplat
@@ -1468,9 +1503,16 @@ async function loadLocalSplat(file) {
       prevSplat.dispose()
     }
 
-    await initializeLod(activeSplat)
+    if (loadedWithLod) {
+      await initializeLod(activeSplat)
+    } else {
+      lodRampState.active = false
+      lodStatus.textContent = `Loaded (safe mode): ${file.name}`
+    }
     resetView()
-    lodStatus.textContent = `Loaded: ${file.name}`
+    if (loadedWithLod) {
+      lodStatus.textContent = `Loaded: ${file.name}`
+    }
     window.setTimeout(() => {
       lodStatus.classList.add('is-hidden')
     }, 1400)
@@ -1740,9 +1782,11 @@ function updateLodPerfBudget(deltaTime) {
 
 async function initializeLod(targetSplat = activeSplat) {
   if (!targetSplat) {
+    lodRampState.active = false
     lodStatus.textContent = 'No splat loaded'
     return
   }
+  lodRampState.active = false
 
   try {
     lodStatus.textContent = 'Loading splats...'
@@ -1772,6 +1816,7 @@ async function initializeLod(targetSplat = activeSplat) {
     const reason = error instanceof Error ? error.message : String(error)
     lodStatus.textContent = `LoD disabled: ${reason.slice(0, 64)}`
     targetSplat.enableLod = false
+    lodRampState.active = false
   }
 }
 
