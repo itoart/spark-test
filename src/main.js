@@ -20,19 +20,19 @@ const cpuCores = navigator.hardwareConcurrency ?? 4
 const deviceMemoryGb = navigator.deviceMemory ?? 4
 const isLowEndDevice = cpuCores <= 6 || deviceMemoryGb <= 4
 const MAX_PIXEL_RATIO = isLowEndDevice ? 1.15 : 1.5
-const LOD_SCALE_COARSE = isCoarsePointer ? 0.55 : isLowEndDevice ? 0.75 : 0.65
-const LOD_SCALE_MOTION = isCoarsePointer ? 0.9 : isLowEndDevice ? 1.05 : 0.95
-const LOD_SCALE_FINE = isCoarsePointer ? 1.15 : isLowEndDevice ? 1.45 : 1.9
+const LOD_SCALE_COARSE = isCoarsePointer ? 0.7 : isLowEndDevice ? 0.75 : 0.65
+const LOD_SCALE_MOTION = isCoarsePointer ? 1.05 : isLowEndDevice ? 1.05 : 0.95
+const LOD_SCALE_FINE = isCoarsePointer ? 1.45 : isLowEndDevice ? 1.45 : 1.9
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = 0.35
 const LOD_TARGET_FPS = isCoarsePointer ? MOBILE_TARGET_FPS : 60
 const LOD_TARGET_FRAME_MS = 1000 / LOD_TARGET_FPS
 const LOD_FRAME_EMA_ALPHA = 0.2
-const LOD_SLOW_FRAME_MULTIPLIER = 1.08
-const LOD_FAST_FRAME_MULTIPLIER = 0.9
-const LOD_QUALITY_DROP_PER_SEC = 0.65
-const LOD_QUALITY_RISE_PER_SEC = 0.35
+const LOD_SLOW_FRAME_MULTIPLIER = isCoarsePointer ? 1.2 : 1.08
+const LOD_FAST_FRAME_MULTIPLIER = isCoarsePointer ? 0.85 : 0.9
+const LOD_QUALITY_DROP_PER_SEC = isCoarsePointer ? 0.35 : 0.65
+const LOD_QUALITY_RISE_PER_SEC = isCoarsePointer ? 0.5 : 0.35
 const LOD_QUALITY_DROP_OVERSHOOT_CAP = 2
 const LOD_QUALITY_RISE_HEADROOM_CAP = 1.6
 const LOD_MOTION_LERP_ALPHA = 0.35
@@ -77,7 +77,6 @@ const isAppleMobileLike =
   /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 const INPUT_ACCEPT = isAppleMobileLike ? '*/*' : DEFAULT_INPUT_ACCEPT
-const PREFER_NON_LOD_LOCAL_LOAD = isAppleMobileLike
 
 const scene = new THREE.Scene()
 scene.background = null
@@ -984,13 +983,13 @@ const spark = new SparkRenderer({
   renderer,
   enableLod: true,
   maxStdDev: Math.sqrt(isCoarsePointer ? 4 : 5),
-  maxPixelRadius: isCoarsePointer ? 128 : 256,
+  maxPixelRadius: isCoarsePointer ? 160 : 256,
   minPixelRadius: isCoarsePointer ? 0.6 : 0.4,
   minAlpha: isCoarsePointer ? 0.01 : 0.006,
-  minSortIntervalMs: isCoarsePointer ? 32 : isLowEndDevice ? 24 : 12,
+  minSortIntervalMs: isCoarsePointer ? 24 : isLowEndDevice ? 24 : 12,
   lodSplatScale: LOD_SCALE_COARSE,
   behindFoveate: 1.0,
-  numLodFetchers: isCoarsePointer ? 1 : 4,
+  numLodFetchers: isCoarsePointer ? 2 : 4,
 })
 scene.add(spark)
 
@@ -1479,7 +1478,7 @@ async function loadLocalSplat(file) {
   try {
     const fileBytes = new Uint8Array(await file.arrayBuffer())
     let nextSplat = null
-    let loadedWithLod = !PREFER_NON_LOD_LOCAL_LOAD
+    let loadedWithLod = true
 
     try {
       nextSplat = await createInitializedSplatMesh(fileBytes, file.name, loadedWithLod)
