@@ -26,7 +26,6 @@ const LOD_SCALE_FINE = isCoarsePointer ? 1.15 : isLowEndDevice ? 1.45 : 1.9
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = 0.35
-const LOD_ENABLE_DELAY_SECONDS = 0.2
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 const ORBIT_RADIUS = INITIAL_CAMERA_POSITION.distanceTo(INITIAL_TARGET)
@@ -343,7 +342,6 @@ const lodRampState = {
   settleTime: 0,
   controlsInteracting: false,
   forceCoarseUntil: 0,
-  lodEnableCooldown: 0,
   lastPos: new THREE.Vector3(),
   lastQuat: new THREE.Quaternion(),
 }
@@ -1670,7 +1668,6 @@ function hasGeneratedLod(mesh) {
 function initializeLodRamp() {
   lodRampState.active = true
   lodRampState.settleTime = 0
-  lodRampState.lodEnableCooldown = 0
   lodRampState.lastPos.copy(camera.position)
   lodRampState.lastQuat.copy(camera.quaternion)
   spark.lodSplatScale = LOD_SCALE_COARSE
@@ -1876,24 +1873,12 @@ function updateAdaptiveLod(deltaTime) {
 
   if (coarseRequested || motion > LOD_MOTION_THRESHOLD) {
     lodRampState.settleTime = 0
-    lodRampState.lodEnableCooldown = LOD_ENABLE_DELAY_SECONDS
-    if (activeSplat.enableLod) {
-      activeSplat.enableLod = false
-    }
     spark.lodSplatScale = THREE.MathUtils.lerp(
       spark.lodSplatScale,
       LOD_SCALE_COARSE,
       0.35
     )
   } else {
-    lodRampState.lodEnableCooldown = Math.max(
-      0,
-      lodRampState.lodEnableCooldown - deltaTime
-    )
-    if (!activeSplat.enableLod && lodRampState.lodEnableCooldown === 0) {
-      activeSplat.enableLod = true
-    }
-
     lodRampState.settleTime = Math.min(
       LOD_RAMP_SECONDS,
       lodRampState.settleTime + deltaTime
