@@ -19,10 +19,19 @@ const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
 const cpuCores = navigator.hardwareConcurrency ?? 4
 const deviceMemoryGb = navigator.deviceMemory ?? 4
 const isLowEndDevice = cpuCores <= 6 || deviceMemoryGb <= 4
+const isAppleMobileLike =
+  /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 const MAX_PIXEL_RATIO = isLowEndDevice ? 1.15 : 1.5
-const LOD_SCALE_COARSE = isCoarsePointer ? 0.7 : isLowEndDevice ? 0.75 : 0.65
-const LOD_SCALE_MOTION = isCoarsePointer ? 1.05 : isLowEndDevice ? 1.05 : 0.95
-const LOD_SCALE_FINE = isCoarsePointer ? 1.45 : isLowEndDevice ? 1.45 : 1.9
+const LOD_SCALE_COARSE = isCoarsePointer
+  ? isAppleMobileLike ? 0.9 : 0.8
+  : isLowEndDevice ? 0.75 : 0.65
+const LOD_SCALE_MOTION = isCoarsePointer
+  ? isAppleMobileLike ? 1.35 : 1.2
+  : isLowEndDevice ? 1.05 : 0.95
+const LOD_SCALE_FINE = isCoarsePointer
+  ? isAppleMobileLike ? 1.9 : 1.65
+  : isLowEndDevice ? 1.45 : 1.9
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = 0.35
@@ -35,6 +44,9 @@ const LOD_QUALITY_DROP_PER_SEC = isCoarsePointer ? 0.35 : 0.65
 const LOD_QUALITY_RISE_PER_SEC = isCoarsePointer ? 0.5 : 0.35
 const LOD_QUALITY_DROP_OVERSHOOT_CAP = 2
 const LOD_QUALITY_RISE_HEADROOM_CAP = 1.6
+const LOD_QUALITY_FLOOR = isCoarsePointer
+  ? isAppleMobileLike ? 0.72 : 0.55
+  : 0
 const LOD_MOTION_LERP_ALPHA = 0.35
 const LOD_SETTLED_LERP_ALPHA = 0.12
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
@@ -73,9 +85,6 @@ const IMAGE_VIEW_MAX_SCALE = 8
 const MARKER_WARP_BACK_OFFSET = 2.5
 const DEFAULT_INPUT_ACCEPT =
   '.ply,.sog,.sogs,.spz,.splat,.ksplat,.json,.zip,.txt,.csv,.jpg,.jpeg,.png,.webp,.bmp,.gif,.tif,.tiff'
-const isAppleMobileLike =
-  /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
-  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 const INPUT_ACCEPT = isAppleMobileLike ? '*/*' : DEFAULT_INPUT_ACCEPT
 
 const scene = new THREE.Scene()
@@ -417,8 +426,8 @@ function requestCoarseLod(seconds = LOD_SETTLE_DELAY_SECONDS) {
   )
 }
 
-function clamp01(value) {
-  return THREE.MathUtils.clamp(value, 0, 1)
+function clampLodQuality(value) {
+  return THREE.MathUtils.clamp(value, LOD_QUALITY_FLOOR, 1)
 }
 
 function getLodRampTargetScale(settleTime) {
@@ -983,13 +992,13 @@ const spark = new SparkRenderer({
   renderer,
   enableLod: true,
   maxStdDev: Math.sqrt(isCoarsePointer ? 4 : 5),
-  maxPixelRadius: isCoarsePointer ? 160 : 256,
+  maxPixelRadius: isCoarsePointer ? (isAppleMobileLike ? 224 : 176) : 256,
   minPixelRadius: isCoarsePointer ? 0.6 : 0.4,
   minAlpha: isCoarsePointer ? 0.01 : 0.006,
-  minSortIntervalMs: isCoarsePointer ? 24 : isLowEndDevice ? 24 : 12,
+  minSortIntervalMs: isCoarsePointer ? (isAppleMobileLike ? 16 : 20) : isLowEndDevice ? 24 : 12,
   lodSplatScale: LOD_SCALE_COARSE,
   behindFoveate: 1.0,
-  numLodFetchers: isCoarsePointer ? 2 : 4,
+  numLodFetchers: isCoarsePointer ? (isAppleMobileLike ? 3 : 2) : 4,
 })
 scene.add(spark)
 
@@ -1762,7 +1771,7 @@ function updateLodPerfBudget(deltaTime) {
 
   if (lodPerfState.frameMs > slowThresholdMs) {
     const overshoot = lodPerfState.frameMs / slowThresholdMs
-    lodPerfState.quality = clamp01(
+    lodPerfState.quality = clampLodQuality(
       lodPerfState.quality -
         LOD_QUALITY_DROP_PER_SEC *
           deltaTime *
@@ -1770,7 +1779,7 @@ function updateLodPerfBudget(deltaTime) {
     )
   } else if (lodPerfState.frameMs < fastThresholdMs) {
     const headroom = fastThresholdMs / Math.max(1e-6, lodPerfState.frameMs)
-    lodPerfState.quality = clamp01(
+    lodPerfState.quality = clampLodQuality(
       lodPerfState.quality +
         LOD_QUALITY_RISE_PER_SEC *
           deltaTime *
