@@ -19,13 +19,24 @@ const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches
 const cpuCores = navigator.hardwareConcurrency ?? 4
 const deviceMemoryGb = navigator.deviceMemory ?? 4
 const isLowEndDevice = cpuCores <= 6 || deviceMemoryGb <= 4
-const ENABLE_LOD = true
 const MAX_PIXEL_RATIO = isLowEndDevice ? 1.15 : 1.5
 const LOD_SCALE_COARSE = isCoarsePointer ? 0.55 : isLowEndDevice ? 0.75 : 0.65
+const LOD_SCALE_MOTION = isCoarsePointer ? 0.9 : isLowEndDevice ? 1.05 : 0.95
 const LOD_SCALE_FINE = isCoarsePointer ? 1.15 : isLowEndDevice ? 1.45 : 1.9
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = 0.35
+const LOD_TARGET_FPS = isCoarsePointer ? MOBILE_TARGET_FPS : 60
+const LOD_TARGET_FRAME_MS = 1000 / LOD_TARGET_FPS
+const LOD_FRAME_EMA_ALPHA = 0.2
+const LOD_SLOW_FRAME_MULTIPLIER = 1.08
+const LOD_FAST_FRAME_MULTIPLIER = 0.9
+const LOD_QUALITY_DROP_PER_SEC = 0.65
+const LOD_QUALITY_RISE_PER_SEC = 0.35
+const LOD_QUALITY_DROP_OVERSHOOT_CAP = 2
+const LOD_QUALITY_RISE_HEADROOM_CAP = 1.6
+const LOD_MOTION_LERP_ALPHA = 0.35
+const LOD_SETTLED_LERP_ALPHA = 0.12
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 const ORBIT_RADIUS = INITIAL_CAMERA_POSITION.distanceTo(INITIAL_TARGET)
@@ -79,9 +90,14 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.copy(INITIAL_CAMERA_POSITION)
 
 const renderer = new THREE.WebGLRenderer({ antialias: false })
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
-renderer.setSize(window.innerWidth, window.innerHeight)
 renderer.setClearColor('#000000', 1)
+
+function updateRendererViewport() {
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
+  renderer.setSize(window.innerWidth, window.innerHeight)
+}
+
+updateRendererViewport()
 
 function createSkyDome() {
   const geometry = new THREE.SphereGeometry(2000, 48, 32)
@@ -345,6 +361,10 @@ const lodRampState = {
   lastPos: new THREE.Vector3(),
   lastQuat: new THREE.Quaternion(),
 }
+const lodPerfState = {
+  frameMs: LOD_TARGET_FRAME_MS,
+  quality: 1,
+}
 
 const clock = new THREE.Clock()
 let lastFrameTimeSeconds = 0
@@ -395,6 +415,19 @@ function requestCoarseLod(seconds = LOD_SETTLE_DELAY_SECONDS) {
     lodRampState.forceCoarseUntil,
     nowSeconds() + seconds
   )
+}
+
+function clamp01(value) {
+  return THREE.MathUtils.clamp(value, 0, 1)
+}
+
+function getLodRampTargetScale(settleTime) {
+  const t = settleTime / LOD_RAMP_SECONDS
+  return THREE.MathUtils.lerp(LOD_SCALE_COARSE, LOD_SCALE_FINE, t)
+}
+
+function getBudgetedLodScale(targetScale) {
+  return THREE.MathUtils.lerp(LOD_SCALE_COARSE, targetScale, lodPerfState.quality)
 }
 
 syncLookStateFromCamera()
@@ -948,7 +981,7 @@ for (const eventName of ['pointerdown', 'pointermove', 'pointerup', 'pointercanc
 
 const spark = new SparkRenderer({
   renderer,
-  enableLod: ENABLE_LOD,
+  enableLod: true,
   maxStdDev: Math.sqrt(isCoarsePointer ? 4 : 5),
   maxPixelRadius: isCoarsePointer ? 128 : 256,
   minPixelRadius: isCoarsePointer ? 0.6 : 0.4,
@@ -1419,7 +1452,7 @@ async function loadLocalSplat(file) {
     const nextSplat = new SplatMesh({
       fileBytes,
       fileName: file.name,
-      lod: ENABLE_LOD,
+      lod: true,
       nonLod: true,
       enableLod: false,
       behindFoveate: 1.0,
@@ -1670,18 +1703,44 @@ function initializeLodRamp() {
   lodRampState.settleTime = 0
   lodRampState.lastPos.copy(camera.position)
   lodRampState.lastQuat.copy(camera.quaternion)
+  lodPerfState.frameMs = LOD_TARGET_FRAME_MS
+  lodPerfState.quality = 1
   spark.lodSplatScale = LOD_SCALE_COARSE
+}
+
+function updateLodPerfBudget(deltaTime) {
+  const currentFrameMs = deltaTime * 1000
+  lodPerfState.frameMs = THREE.MathUtils.lerp(
+    lodPerfState.frameMs,
+    currentFrameMs,
+    LOD_FRAME_EMA_ALPHA
+  )
+
+  const slowThresholdMs = LOD_TARGET_FRAME_MS * LOD_SLOW_FRAME_MULTIPLIER
+  const fastThresholdMs = LOD_TARGET_FRAME_MS * LOD_FAST_FRAME_MULTIPLIER
+
+  if (lodPerfState.frameMs > slowThresholdMs) {
+    const overshoot = lodPerfState.frameMs / slowThresholdMs
+    lodPerfState.quality = clamp01(
+      lodPerfState.quality -
+        LOD_QUALITY_DROP_PER_SEC *
+          deltaTime *
+          Math.min(LOD_QUALITY_DROP_OVERSHOOT_CAP, overshoot)
+    )
+  } else if (lodPerfState.frameMs < fastThresholdMs) {
+    const headroom = fastThresholdMs / Math.max(1e-6, lodPerfState.frameMs)
+    lodPerfState.quality = clamp01(
+      lodPerfState.quality +
+        LOD_QUALITY_RISE_PER_SEC *
+          deltaTime *
+          Math.min(LOD_QUALITY_RISE_HEADROOM_CAP, headroom)
+    )
+  }
 }
 
 async function initializeLod(targetSplat = activeSplat) {
   if (!targetSplat) {
     lodStatus.textContent = 'No splat loaded'
-    return
-  }
-
-  if (!ENABLE_LOD) {
-    targetSplat.enableLod = false
-    lodStatus.textContent = 'LoD disabled'
     return
   }
 
@@ -1719,8 +1778,7 @@ async function initializeLod(targetSplat = activeSplat) {
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
-  renderer.setSize(window.innerWidth, window.innerHeight)
+  updateRendererViewport()
 })
 
 function updateLook(deltaTime) {
@@ -1864,6 +1922,7 @@ function updateAdaptiveLod(deltaTime) {
   if (!lodRampState.active || !activeSplat) {
     return
   }
+  updateLodPerfBudget(deltaTime)
 
   const positionDelta = camera.position.distanceTo(lodRampState.lastPos)
   const angleDelta = camera.quaternion.angleTo(lodRampState.lastQuat)
@@ -1873,22 +1932,23 @@ function updateAdaptiveLod(deltaTime) {
 
   if (coarseRequested || motion > LOD_MOTION_THRESHOLD) {
     lodRampState.settleTime = 0
+    const budgetedMotionScale = getBudgetedLodScale(LOD_SCALE_MOTION)
     spark.lodSplatScale = THREE.MathUtils.lerp(
       spark.lodSplatScale,
-      LOD_SCALE_COARSE,
-      0.35
+      budgetedMotionScale,
+      LOD_MOTION_LERP_ALPHA
     )
   } else {
     lodRampState.settleTime = Math.min(
       LOD_RAMP_SECONDS,
       lodRampState.settleTime + deltaTime
     )
-    const t = lodRampState.settleTime / LOD_RAMP_SECONDS
-    const targetScale = THREE.MathUtils.lerp(LOD_SCALE_COARSE, LOD_SCALE_FINE, t)
+    const rampTargetScale = getLodRampTargetScale(lodRampState.settleTime)
+    const budgetedTargetScale = getBudgetedLodScale(rampTargetScale)
     spark.lodSplatScale = THREE.MathUtils.lerp(
       spark.lodSplatScale,
-      targetScale,
-      0.12
+      budgetedTargetScale,
+      LOD_SETTLED_LERP_ALPHA
     )
   }
 
