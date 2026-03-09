@@ -1474,7 +1474,12 @@ async function loadPoseFile(file, imageFiles = []) {
   }
 }
 
-async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
+async function createInitializedSplatMesh(
+  fileBytes,
+  fileName,
+  useLod,
+  extraOptions = {}
+) {
   const fileType = getSparkFileType(fileName)
   const mesh = new SplatMesh({
     fileBytes,
@@ -1484,6 +1489,7 @@ async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
     nonLod: true,
     enableLod: false,
     behindFoveate: 1.0,
+    ...extraOptions,
   })
   try {
     await mesh.initialized
@@ -1505,11 +1511,21 @@ function getSparkFileType(fileName) {
   return undefined
 }
 
-async function createInitializedSplatMeshWithRetry(fileBytes, fileName, useLod) {
+async function createInitializedSplatMeshWithRetry(
+  fileBytes,
+  fileName,
+  useLod,
+  extraOptions = {}
+) {
   let lastError = null
   for (let attempt = 0; attempt <= IOS_SPLAT_INIT_RETRIES; attempt += 1) {
     try {
-      return await createInitializedSplatMesh(fileBytes, fileName, useLod)
+      return await createInitializedSplatMesh(
+        fileBytes,
+        fileName,
+        useLod,
+        extraOptions
+      )
     } catch (error) {
       lastError = error
       if (attempt < IOS_SPLAT_INIT_RETRIES) {
@@ -1534,7 +1550,15 @@ async function loadLocalSplat(file) {
     let loadedWithLod = !isAppleMobileLike
     const fileBytes = new Uint8Array(await file.arrayBuffer())
     if (isAppleMobileLike) {
-      nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, false)
+      // Force the csplat decode path, but skip runtime LoD generation by setting
+      // lodAbove larger than any realistic local scene size.
+      nextSplat = await createInitializedSplatMeshWithRetry(
+        fileBytes,
+        file.name,
+        true,
+        { lodAbove: Number.MAX_SAFE_INTEGER }
+      )
+      loadedWithLod = false
     } else {
       nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, true)
     }
