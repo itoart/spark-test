@@ -1482,7 +1482,7 @@ async function loadPoseFile(file, imageFiles = []) {
   }
 }
 
-async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
+async function createInitializedDecodedSplatMesh(fileBytes, fileName, useLod) {
   const fileType = getExplicitSparkFileType(fileName)
   const decoded = await unpackSplats({
     input: fileBytes,
@@ -1508,6 +1508,33 @@ async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
     mesh.dispose?.()
     throw error
   }
+}
+
+async function createInitializedNativeSplatMesh(fileBytes, fileName, useLod) {
+  const fileType = getSparkFileType(fileName)
+  const mesh = new SplatMesh({
+    fileBytes,
+    fileName,
+    fileType,
+    lod: useLod,
+    nonLod: true,
+    enableLod: false,
+    behindFoveate: 1.0,
+  })
+  try {
+    await mesh.initialized
+    return mesh
+  } catch (error) {
+    mesh.dispose?.()
+    throw error
+  }
+}
+
+async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
+  if (isAppleMobileLike) {
+    return createInitializedDecodedSplatMesh(fileBytes, fileName, useLod)
+  }
+  return createInitializedNativeSplatMesh(fileBytes, fileName, useLod)
 }
 
 function getSparkFileType(fileName) {
