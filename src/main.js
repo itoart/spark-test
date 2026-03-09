@@ -1562,16 +1562,25 @@ async function loadLocalSplat(file) {
   try {
     const fileBytes = new Uint8Array(await file.arrayBuffer())
     let nextSplat = null
-    let loadedWithLod = true
-    try {
-      nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, true)
-    } catch (error) {
-      if (!isAppleMobileLike) {
+    let loadedWithLod = !isAppleMobileLike
+
+    if (isAppleMobileLike) {
+      try {
+        nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, false)
+      } catch (error) {
+        console.warn('Native iPad loader failed, retrying fallback mode', error)
+        lodStatus.textContent = 'Retrying stable iPad mode...'
+        nextSplat = await createInitializedFallbackSplatMesh(fileBytes, file.name)
+      }
+    } else {
+      try {
+        nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, true)
+      } catch (error) {
         throw error
       }
-      console.warn('Native iPad loader failed, retrying fallback mode', error)
-      lodStatus.textContent = 'Retrying stable iPad mode...'
-      loadedWithLod = false
+    }
+
+    if (!nextSplat) {
       nextSplat = await createInitializedFallbackSplatMesh(fileBytes, file.name)
     }
 
