@@ -56,10 +56,8 @@ const LOD_QUALITY_FLOOR = isCoarsePointer
   : 0
 const LOD_MOTION_LERP_ALPHA = 0.35
 const LOD_SETTLED_LERP_ALPHA = 0.12
-const IOS_SPLAT_INIT_RETRIES = isAppleMobileLike ? 1 : 0
-const IOS_SPLAT_INIT_RETRY_DELAY_MS = 140
-const IOS_URL_SPLAT_INIT_RETRIES = isAppleMobileLike ? 2 : 0
-const IOS_URL_SPLAT_INIT_RETRY_DELAY_MS = 220
+const IOS_SPLAT_INIT_RETRIES = isAppleMobileLike ? 2 : 0
+const IOS_SPLAT_INIT_RETRY_DELAY_MS = 220
 const IOS_MAX_PIXEL_RATIO = 1.5
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
@@ -1032,7 +1030,6 @@ const spark = new SparkRenderer({
 scene.add(spark)
 
 let activeSplat = null
-let activeSplatObjectUrl = null
 const poseMarkersRoot = new THREE.Group()
 poseMarkersRoot.rotation.x = SCENE_ALIGNMENT_ROTATION_X
 scene.add(poseMarkersRoot)
@@ -1508,43 +1505,6 @@ function getSparkFileType(fileName) {
   return undefined
 }
 
-async function createInitializedSplatMeshFromUrl(file, useLod) {
-  const objectUrl = URL.createObjectURL(file)
-  const fileType = getSparkFileType(file.name)
-  const mesh = new SplatMesh({
-    url: objectUrl,
-    fileName: file.name,
-    fileType,
-    lod: useLod,
-    nonLod: true,
-    enableLod: false,
-    behindFoveate: 1.0,
-  })
-  try {
-    await mesh.initialized
-    return { mesh, objectUrl }
-  } catch (error) {
-    mesh.dispose?.()
-    URL.revokeObjectURL(objectUrl)
-    throw error
-  }
-}
-
-async function createInitializedSplatMeshFromUrlWithRetry(file, useLod) {
-  let lastError = null
-  for (let attempt = 0; attempt <= IOS_URL_SPLAT_INIT_RETRIES; attempt += 1) {
-    try {
-      return await createInitializedSplatMeshFromUrl(file, useLod)
-    } catch (error) {
-      lastError = error
-      if (attempt < IOS_URL_SPLAT_INIT_RETRIES) {
-        await waitMs(IOS_URL_SPLAT_INIT_RETRY_DELAY_MS * (attempt + 1))
-      }
-    }
-  }
-  throw lastError
-}
-
 async function createInitializedSplatMeshWithRetry(fileBytes, fileName, useLod) {
   let lastError = null
   for (let attempt = 0; attempt <= IOS_SPLAT_INIT_RETRIES; attempt += 1) {
@@ -1572,14 +1532,10 @@ async function loadLocalSplat(file) {
   try {
     let nextSplat = null
     let loadedWithLod = !isAppleMobileLike
-    let nextObjectUrl = null
+    const fileBytes = new Uint8Array(await file.arrayBuffer())
     if (isAppleMobileLike) {
-      // iPad Safari is much more stable with URL-based decode and no runtime LoD tree generation.
-      const initialized = await createInitializedSplatMeshFromUrlWithRetry(file, false)
-      nextSplat = initialized.mesh
-      nextObjectUrl = initialized.objectUrl
+      nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, false)
     } else {
-      const fileBytes = new Uint8Array(await file.arrayBuffer())
       nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, true)
     }
 
@@ -1587,15 +1543,10 @@ async function loadLocalSplat(file) {
     scene.add(nextSplat)
 
     const prevSplat = activeSplat
-    const prevObjectUrl = activeSplatObjectUrl
     activeSplat = nextSplat
-    activeSplatObjectUrl = nextObjectUrl
     if (prevSplat) {
       scene.remove(prevSplat)
       prevSplat.dispose()
-    }
-    if (prevObjectUrl) {
-      URL.revokeObjectURL(prevObjectUrl)
     }
 
     if (loadedWithLod) {
