@@ -3,6 +3,8 @@ import * as THREE from 'three'
 import { SparkRenderer, SplatMesh, SplatFileType } from '@sparkjsdev/spark'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
+window.__SPARK_TEST_BUILD__ = '2026-03-09-restore-1'
+
 const MOVE_SPEED = 5
 const LOOK_SPEED = 1.1
 const MOBILE_MOVE_SPEED_MULTIPLIER = 0.5
