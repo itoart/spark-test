@@ -22,7 +22,7 @@ const isAppleMobileLike =
   /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 const LOD_SCALE_COARSE = isCoarsePointer
-  ? isAppleMobileLike ? 0.9 : 0.8
+  ? 0.6
   : isLowEndDevice ? 0.75 : 0.65
 const LOD_SCALE_MOTION = isCoarsePointer
   ? 0.75
