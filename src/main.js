@@ -1,6 +1,12 @@
 import './style.css'
 import * as THREE from 'three'
-import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark'
+import {
+  SparkRenderer,
+  SplatMesh,
+  SplatFileType,
+  PackedSplats,
+  unpackSplats,
+} from '@sparkjsdev/spark'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const MOVE_SPEED = 5
@@ -58,6 +64,7 @@ const LOD_MOTION_LERP_ALPHA = 0.35
 const LOD_SETTLED_LERP_ALPHA = 0.12
 const IOS_SPLAT_INIT_RETRIES = isAppleMobileLike ? 1 : 0
 const IOS_SPLAT_INIT_RETRY_DELAY_MS = 140
+const IOS_MAX_PIXEL_RATIO = 1.5
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 const ORBIT_RADIUS = INITIAL_CAMERA_POSITION.distanceTo(INITIAL_TARGET)
@@ -111,7 +118,10 @@ const renderer = new THREE.WebGLRenderer({ antialias: false })
 renderer.setClearColor('#000000', 1)
 
 function updateRendererViewport() {
-  renderer.setPixelRatio(window.devicePixelRatio)
+  const pixelRatio = isAppleMobileLike
+    ? Math.min(window.devicePixelRatio, IOS_MAX_PIXEL_RATIO)
+    : window.devicePixelRatio
+  renderer.setPixelRatio(pixelRatio)
   renderer.setSize(window.innerWidth, window.innerHeight)
 }
 
@@ -1491,6 +1501,40 @@ async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
   }
 }
 
+async function createInitializedFallbackSplatMesh(fileBytes, fileName) {
+  const decoded = await unpackSplats({
+    input: fileBytes,
+    fileType: getExplicitSparkFileType(fileName),
+    pathOrUrl: fileName,
+  })
+  const packedSplats = new PackedSplats({
+    packedArray: decoded.packedArray,
+    numSplats: decoded.numSplats,
+    extra: decoded.extra,
+  })
+  const mesh = new SplatMesh({
+    packedSplats,
+    lod: false,
+    nonLod: true,
+    enableLod: false,
+    behindFoveate: 1.0,
+  })
+  try {
+    await mesh.initialized
+    return mesh
+  } catch (error) {
+    mesh.dispose?.()
+    throw error
+  }
+}
+
+function getExplicitSparkFileType(fileName) {
+  const ext = getFileExtension(fileName)
+  if (ext === '.splat') return SplatFileType.SPLAT
+  if (ext === '.ksplat') return SplatFileType.KSPLAT
+  return undefined
+}
+
 async function createInitializedSplatMeshWithRetry(fileBytes, fileName, useLod) {
   let lastError = null
   for (let attempt = 0; attempt <= IOS_SPLAT_INIT_RETRIES; attempt += 1) {
@@ -1525,10 +1569,10 @@ async function loadLocalSplat(file) {
       if (!isAppleMobileLike) {
         throw error
       }
-      console.warn('LoD init unstable on iPad, retrying stable mode', error)
+      console.warn('Native iPad loader failed, retrying fallback mode', error)
       lodStatus.textContent = 'Retrying stable iPad mode...'
       loadedWithLod = false
-      nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, false)
+      nextSplat = await createInitializedFallbackSplatMesh(fileBytes, file.name)
     }
 
     nextSplat.rotation.x = SCENE_ALIGNMENT_ROTATION_X
