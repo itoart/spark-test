@@ -21,6 +21,14 @@ const isLowEndDevice = cpuCores <= 6 || deviceMemoryGb <= 4
 const isAppleMobileLike =
   /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+const BASE_MIN_PIXEL_RADIUS = isCoarsePointer ? 0.6 : 0.4
+const BASE_MIN_ALPHA = isCoarsePointer ? 0.01 : 0.006
+const BASE_MIN_SORT_INTERVAL_MS = isCoarsePointer
+  ? isAppleMobileLike ? 12 : 16
+  : isLowEndDevice ? 24 : 12
+const INTERACTION_MIN_PIXEL_RADIUS = isCoarsePointer ? 1.0 : BASE_MIN_PIXEL_RADIUS
+const INTERACTION_MIN_ALPHA = isCoarsePointer ? 0.025 : BASE_MIN_ALPHA
+const INTERACTION_MIN_SORT_INTERVAL_MS = isCoarsePointer ? 48 : BASE_MIN_SORT_INTERVAL_MS
 const LOD_SCALE_COARSE = isCoarsePointer
   ? 0.6
   : isLowEndDevice ? 0.75 : 0.65
@@ -1005,9 +1013,9 @@ const spark = new SparkRenderer({
   enableLod: true,
   maxStdDev: Math.sqrt(isCoarsePointer ? 4 : 5),
   maxPixelRadius: isCoarsePointer ? (isAppleMobileLike ? 256 : 224) : 256,
-  minPixelRadius: isCoarsePointer ? 0.6 : 0.4,
-  minAlpha: isCoarsePointer ? 0.01 : 0.006,
-  minSortIntervalMs: isCoarsePointer ? (isAppleMobileLike ? 12 : 16) : isLowEndDevice ? 24 : 12,
+  minPixelRadius: BASE_MIN_PIXEL_RADIUS,
+  minAlpha: BASE_MIN_ALPHA,
+  minSortIntervalMs: BASE_MIN_SORT_INTERVAL_MS,
   lodSplatScale: LOD_SCALE_COARSE,
   behindFoveate: 1.0,
   numLodFetchers: isCoarsePointer ? (isAppleMobileLike ? 4 : 3) : 4,
@@ -2021,9 +2029,15 @@ function updateAdaptiveLod(deltaTime) {
   if (coarseRequested) {
     lodRampState.settleTime = 0
     spark.lodSplatScale = LOD_SCALE_COARSE
+    spark.minSortIntervalMs = INTERACTION_MIN_SORT_INTERVAL_MS
+    spark.minPixelRadius = INTERACTION_MIN_PIXEL_RADIUS
+    spark.minAlpha = INTERACTION_MIN_ALPHA
     activeSplat.lodScale = MESH_LOD_SCALE_COARSE
   } else if (motion > LOD_MOTION_THRESHOLD) {
     lodRampState.settleTime = 0
+    spark.minSortIntervalMs = INTERACTION_MIN_SORT_INTERVAL_MS
+    spark.minPixelRadius = INTERACTION_MIN_PIXEL_RADIUS
+    spark.minAlpha = INTERACTION_MIN_ALPHA
     const budgetedMotionScale = getBudgetedLodScale(LOD_SCALE_MOTION)
     spark.lodSplatScale = THREE.MathUtils.lerp(
       spark.lodSplatScale,
@@ -2036,6 +2050,9 @@ function updateAdaptiveLod(deltaTime) {
       LOD_MOTION_LERP_ALPHA
     )
   } else {
+    spark.minSortIntervalMs = BASE_MIN_SORT_INTERVAL_MS
+    spark.minPixelRadius = BASE_MIN_PIXEL_RADIUS
+    spark.minAlpha = BASE_MIN_ALPHA
     lodRampState.settleTime = Math.min(
       LOD_RAMP_SECONDS,
       lodRampState.settleTime + deltaTime
