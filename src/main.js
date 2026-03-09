@@ -1547,28 +1547,14 @@ async function loadLocalSplat(file) {
   lodStatus.textContent = `Loading local file: ${file.name}`
 
   try {
-    const fileBytes = new Uint8Array(await file.arrayBuffer())
     let nextSplat = null
-    let loadedWithLod = true
-    try {
+    let loadedWithLod = !isAppleMobileLike
+    if (isAppleMobileLike) {
+      // iPad Safari is much more stable with URL-based decode and no runtime LoD tree generation.
+      nextSplat = await createInitializedSplatMeshFromUrl(file, false)
+    } else {
+      const fileBytes = new Uint8Array(await file.arrayBuffer())
       nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, true)
-    } catch (error) {
-      if (!isAppleMobileLike) {
-        throw error
-      }
-      console.warn('LoD init unstable on iPad, retrying stable mode', error)
-      lodStatus.textContent = 'Retrying stable iPad mode...'
-      loadedWithLod = false
-      try {
-        nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, false)
-      } catch (stableError) {
-        console.warn(
-          'Byte decode failed on iPad, retrying URL compatibility mode',
-          stableError
-        )
-        lodStatus.textContent = 'Retrying Safari compatibility mode...'
-        nextSplat = await createInitializedSplatMeshFromUrl(file, false)
-      }
     }
 
     nextSplat.rotation.x = SCENE_ALIGNMENT_ROTATION_X
