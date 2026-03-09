@@ -42,6 +42,8 @@ const LOD_TARGET_FPS = isCoarsePointer ? 30 : 60
 const LOD_TARGET_FRAME_MS = 1000 / LOD_TARGET_FPS
 const LOD_FINE_PROMOTE_FRAME_MULTIPLIER = isCoarsePointer ? 0.9 : 0.85
 const LOD_FINE_PROMOTE_STABLE_SECONDS = isCoarsePointer ? 1.0 : 0.4
+const LOD_FINE_DEMOTE_FRAME_MULTIPLIER = isCoarsePointer ? 1.08 : 1.03
+const LOD_FINE_DEMOTE_MOTION_MULTIPLIER = 2.0
 const LOD_FRAME_EMA_ALPHA = 0.2
 const LOD_SLOW_FRAME_MULTIPLIER = isCoarsePointer ? 1.45 : 1.08
 const LOD_FAST_FRAME_MULTIPLIER = isCoarsePointer ? 0.8 : 0.88
@@ -372,6 +374,7 @@ const lookState = {
 const lodRampState = {
   active: false,
   settleTime: 0,
+  fineMode: false,
   controlsInteracting: false,
   forceCoarseUntil: 0,
   noInputSince: 0,
@@ -1775,6 +1778,7 @@ function hasGeneratedLod(mesh) {
 function initializeLodRamp() {
   lodRampState.active = true
   lodRampState.settleTime = 0
+  lodRampState.fineMode = false
   lodRampState.noInputSince = nowSeconds()
   lodRampState.lastPos.copy(camera.position)
   lodRampState.lastQuat.copy(camera.quaternion)
@@ -2036,8 +2040,13 @@ function updateAdaptiveLod(deltaTime) {
     now - lodRampState.noInputSince >= LOD_FINE_PROMOTE_STABLE_SECONDS &&
     lodPerfState.frameMs <=
       LOD_TARGET_FRAME_MS * LOD_FINE_PROMOTE_FRAME_MULTIPLIER
+  const shouldDemoteFine =
+    motion > LOD_MOTION_THRESHOLD * LOD_FINE_DEMOTE_MOTION_MULTIPLIER ||
+    lodPerfState.frameMs >
+      LOD_TARGET_FRAME_MS * LOD_FINE_DEMOTE_FRAME_MULTIPLIER
 
-  if (!fineEligible) {
+  if (coarseRequested) {
+    lodRampState.fineMode = false
     lodRampState.settleTime = 0
     spark.lodSplatScale = LOD_SCALE_COARSE
     spark.minSortIntervalMs = INTERACTION_MIN_SORT_INTERVAL_MS
@@ -2048,22 +2057,45 @@ function updateAdaptiveLod(deltaTime) {
     spark.minSortIntervalMs = BASE_MIN_SORT_INTERVAL_MS
     spark.minPixelRadius = BASE_MIN_PIXEL_RADIUS
     spark.minAlpha = BASE_MIN_ALPHA
-    lodRampState.settleTime = Math.min(
-      LOD_RAMP_SECONDS,
-      lodRampState.settleTime + deltaTime
-    )
-    const rampTargetScale = getLodRampTargetScale(lodRampState.settleTime)
-    const budgetedTargetScale = getBudgetedLodScale(rampTargetScale)
-    spark.lodSplatScale = THREE.MathUtils.lerp(
-      spark.lodSplatScale,
-      budgetedTargetScale,
-      LOD_SETTLED_LERP_ALPHA
-    )
-    activeSplat.lodScale = THREE.MathUtils.lerp(
-      activeSplat.lodScale ?? MESH_LOD_SCALE_FINE,
-      MESH_LOD_SCALE_FINE,
-      LOD_SETTLED_LERP_ALPHA
-    )
+    if (lodRampState.fineMode) {
+      if (shouldDemoteFine) {
+        lodRampState.fineMode = false
+      }
+    } else if (fineEligible) {
+      lodRampState.fineMode = true
+      lodRampState.settleTime = 0
+    }
+
+    if (lodRampState.fineMode) {
+      lodRampState.settleTime = Math.min(
+        LOD_RAMP_SECONDS,
+        lodRampState.settleTime + deltaTime
+      )
+      const rampTargetScale = getLodRampTargetScale(lodRampState.settleTime)
+      const budgetedTargetScale = getBudgetedLodScale(rampTargetScale)
+      spark.lodSplatScale = THREE.MathUtils.lerp(
+        spark.lodSplatScale,
+        budgetedTargetScale,
+        LOD_SETTLED_LERP_ALPHA
+      )
+      activeSplat.lodScale = THREE.MathUtils.lerp(
+        activeSplat.lodScale ?? MESH_LOD_SCALE_FINE,
+        MESH_LOD_SCALE_FINE,
+        LOD_SETTLED_LERP_ALPHA
+      )
+    } else if (motion > LOD_MOTION_THRESHOLD) {
+      spark.lodSplatScale = THREE.MathUtils.lerp(
+        spark.lodSplatScale,
+        LOD_SCALE_COARSE,
+        LOD_MOTION_LERP_ALPHA
+      )
+      activeSplat.lodScale = THREE.MathUtils.lerp(
+        activeSplat.lodScale ?? MESH_LOD_SCALE_FINE,
+        MESH_LOD_SCALE_COARSE,
+        LOD_MOTION_LERP_ALPHA
+      )
+      lodRampState.settleTime = 0
+    }
   }
 
   lodRampState.lastPos.copy(camera.position)
