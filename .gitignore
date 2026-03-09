@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local 3DGS assets (do not commit)
+public/*.splat
+public/*.ply
+public/*.sog
+public/*.sogs
+public/*.spz
+public/*.ksplat
