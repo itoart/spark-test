@@ -663,6 +663,7 @@ function bindVirtualStick({ root, base, stick, setX, setY }) {
 
   base.addEventListener('pointerdown', (event) => {
     event.preventDefault()
+    requestCoarseLod(1.0)
     root.classList.add('is-active')
     base.setPointerCapture(event.pointerId)
     updateStick(event)
@@ -671,6 +672,7 @@ function bindVirtualStick({ root, base, stick, setX, setY }) {
     if (!root.classList.contains('is-active')) {
       return
     }
+    requestCoarseLod(1.0)
     updateStick(event)
   })
   base.addEventListener('pointerup', (event) => {
