@@ -32,19 +32,16 @@ const INTERACTION_MIN_SORT_INTERVAL_MS = isCoarsePointer ? 48 : BASE_MIN_SORT_IN
 const LOD_SCALE_COARSE = isCoarsePointer
   ? 0.6
   : isLowEndDevice ? 0.75 : 0.65
-const LOD_SCALE_MOTION = isCoarsePointer
-  ? 0.75
-  : isLowEndDevice ? 1.05 : 0.95
-const LOD_SCALE_FINE = 6.0
+const LOD_SCALE_FINE = isCoarsePointer ? 1.8 : 6.0
 const MESH_LOD_SCALE_COARSE = isCoarsePointer ? 0.35 : 0.55
-const MESH_LOD_SCALE_FINE = 1.0
+const MESH_LOD_SCALE_FINE = isCoarsePointer ? 0.7 : 1.0
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = isCoarsePointer ? 1.0 : 0.35
 const LOD_TARGET_FPS = isCoarsePointer ? 30 : 60
 const LOD_TARGET_FRAME_MS = 1000 / LOD_TARGET_FPS
 const LOD_FINE_PROMOTE_FRAME_MULTIPLIER = isCoarsePointer ? 0.9 : 0.85
-const LOD_FINE_PROMOTE_STABLE_SECONDS = isCoarsePointer ? 0.6 : 0.4
+const LOD_FINE_PROMOTE_STABLE_SECONDS = isCoarsePointer ? 1.0 : 0.4
 const LOD_FRAME_EMA_ALPHA = 0.2
 const LOD_SLOW_FRAME_MULTIPLIER = isCoarsePointer ? 1.45 : 1.08
 const LOD_FAST_FRAME_MULTIPLIER = isCoarsePointer ? 0.8 : 0.88
