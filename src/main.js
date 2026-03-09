@@ -1483,7 +1483,7 @@ async function loadPoseFile(file, imageFiles = []) {
 }
 
 async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
-  const fileType = getSparkFileType(fileName)
+  const fileType = getExplicitSparkFileType(fileName)
   const decoded = await unpackSplats({
     input: fileBytes,
     fileType,
@@ -1518,6 +1518,13 @@ function getSparkFileType(fileName) {
   if (ext === '.ksplat') return SplatFileType.KSPLAT
   if (ext === '.sog') return SplatFileType.PCSOGS
   if (ext === '.sogs') return SplatFileType.PCSOGSZIP
+  return undefined
+}
+
+function getExplicitSparkFileType(fileName) {
+  const ext = getFileExtension(fileName)
+  if (ext === '.splat') return SplatFileType.SPLAT
+  if (ext === '.ksplat') return SplatFileType.KSPLAT
   return undefined
 }
 
