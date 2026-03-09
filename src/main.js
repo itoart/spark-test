@@ -1,6 +1,12 @@
 import './style.css'
 import * as THREE from 'three'
-import { SparkRenderer, SplatMesh, SplatFileType } from '@sparkjsdev/spark'
+import {
+  SparkRenderer,
+  SplatMesh,
+  SplatFileType,
+  PackedSplats,
+  unpackSplats,
+} from '@sparkjsdev/spark'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 window.__SPARK_TEST_BUILD__ = '2026-03-09-restore-1'
@@ -1478,10 +1484,18 @@ async function loadPoseFile(file, imageFiles = []) {
 
 async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
   const fileType = getSparkFileType(fileName)
-  const mesh = new SplatMesh({
-    fileBytes,
-    fileName,
+  const decoded = await unpackSplats({
+    input: fileBytes,
     fileType,
+    pathOrUrl: fileName,
+  })
+  const packedSplats = new PackedSplats({
+    packedArray: decoded.packedArray,
+    numSplats: decoded.numSplats,
+    extra: decoded.extra,
+  })
+  const mesh = new SplatMesh({
+    packedSplats,
     lod: useLod,
     nonLod: true,
     enableLod: false,
