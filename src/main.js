@@ -43,6 +43,8 @@ const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = isCoarsePointer ? 1.0 : 0.35
 const LOD_TARGET_FPS = isCoarsePointer ? 30 : 60
 const LOD_TARGET_FRAME_MS = 1000 / LOD_TARGET_FPS
+const LOD_FINE_PROMOTE_FRAME_MULTIPLIER = isCoarsePointer ? 0.9 : 0.85
+const LOD_FINE_PROMOTE_STABLE_SECONDS = isCoarsePointer ? 0.6 : 0.4
 const LOD_FRAME_EMA_ALPHA = 0.2
 const LOD_SLOW_FRAME_MULTIPLIER = isCoarsePointer ? 1.45 : 1.08
 const LOD_FAST_FRAME_MULTIPLIER = isCoarsePointer ? 0.8 : 0.88
@@ -375,6 +377,7 @@ const lodRampState = {
   settleTime: 0,
   controlsInteracting: false,
   forceCoarseUntil: 0,
+  noInputSince: 0,
   lastPos: new THREE.Vector3(),
   lastQuat: new THREE.Quaternion(),
 }
@@ -1775,6 +1778,7 @@ function hasGeneratedLod(mesh) {
 function initializeLodRamp() {
   lodRampState.active = true
   lodRampState.settleTime = 0
+  lodRampState.noInputSince = nowSeconds()
   lodRampState.lastPos.copy(camera.position)
   lodRampState.lastQuat.copy(camera.quaternion)
   lodPerfState.frameMs = LOD_TARGET_FRAME_MS
@@ -2021,34 +2025,28 @@ function updateAdaptiveLod(deltaTime) {
     desktopLookState.dragging ||
     desktopStrafeState.dragging
   const hasInteractionInput = hasMovementInput || hasLookInput
+  const now = nowSeconds()
+  if (hasInteractionInput || lodRampState.controlsInteracting) {
+    lodRampState.noInputSince = now
+  }
   const coarseRequested =
     hasInteractionInput ||
     lodRampState.controlsInteracting ||
-    nowSeconds() < lodRampState.forceCoarseUntil
+    now < lodRampState.forceCoarseUntil
+  const fineEligible =
+    !coarseRequested &&
+    motion <= LOD_MOTION_THRESHOLD &&
+    now - lodRampState.noInputSince >= LOD_FINE_PROMOTE_STABLE_SECONDS &&
+    lodPerfState.frameMs <=
+      LOD_TARGET_FRAME_MS * LOD_FINE_PROMOTE_FRAME_MULTIPLIER
 
-  if (coarseRequested) {
+  if (!fineEligible) {
     lodRampState.settleTime = 0
     spark.lodSplatScale = LOD_SCALE_COARSE
     spark.minSortIntervalMs = INTERACTION_MIN_SORT_INTERVAL_MS
     spark.minPixelRadius = INTERACTION_MIN_PIXEL_RADIUS
     spark.minAlpha = INTERACTION_MIN_ALPHA
     activeSplat.lodScale = MESH_LOD_SCALE_COARSE
-  } else if (motion > LOD_MOTION_THRESHOLD) {
-    lodRampState.settleTime = 0
-    spark.minSortIntervalMs = INTERACTION_MIN_SORT_INTERVAL_MS
-    spark.minPixelRadius = INTERACTION_MIN_PIXEL_RADIUS
-    spark.minAlpha = INTERACTION_MIN_ALPHA
-    const budgetedMotionScale = getBudgetedLodScale(LOD_SCALE_MOTION)
-    spark.lodSplatScale = THREE.MathUtils.lerp(
-      spark.lodSplatScale,
-      budgetedMotionScale,
-      LOD_MOTION_LERP_ALPHA
-    )
-    activeSplat.lodScale = THREE.MathUtils.lerp(
-      activeSplat.lodScale ?? MESH_LOD_SCALE_FINE,
-      MESH_LOD_SCALE_COARSE,
-      LOD_MOTION_LERP_ALPHA
-    )
   } else {
     spark.minSortIntervalMs = BASE_MIN_SORT_INTERVAL_MS
     spark.minPixelRadius = BASE_MIN_PIXEL_RADIUS
