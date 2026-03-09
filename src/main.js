@@ -422,7 +422,6 @@ function requestCoarseLod(seconds = LOD_SETTLE_DELAY_SECONDS) {
     nowSeconds() + seconds
   )
   lodRampState.settleTime = 0
-  lodPerfState.quality = LOD_QUALITY_FLOOR
   if (lodRampState.active && activeSplat) {
     spark.lodSplatScale = LOD_SCALE_COARSE
   }
@@ -1994,7 +1993,10 @@ function updateAdaptiveLod(deltaTime) {
   const coarseRequested =
     lodRampState.controlsInteracting || nowSeconds() < lodRampState.forceCoarseUntil
 
-  if (coarseRequested || motion > LOD_MOTION_THRESHOLD) {
+  if (coarseRequested) {
+    lodRampState.settleTime = 0
+    spark.lodSplatScale = LOD_SCALE_COARSE
+  } else if (motion > LOD_MOTION_THRESHOLD) {
     lodRampState.settleTime = 0
     const budgetedMotionScale = getBudgetedLodScale(LOD_SCALE_MOTION)
     spark.lodSplatScale = THREE.MathUtils.lerp(
