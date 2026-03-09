@@ -1572,13 +1572,17 @@ async function loadLocalSplat(file) {
       prevSplat.dispose()
     }
 
+    resetView()
+
     if (loadedWithLod) {
-      await initializeLod(activeSplat)
+      initializeLod(activeSplat).catch((error) => {
+        console.error('Failed to initialize LoD tree', error)
+      })
     } else {
       lodRampState.active = false
       lodStatus.textContent = `Loaded (stable mode): ${file.name}`
     }
-    resetView()
+
     if (loadedWithLod) {
       lodStatus.textContent = `Loaded: ${file.name}`
     }
