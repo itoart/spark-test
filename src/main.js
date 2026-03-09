@@ -28,6 +28,8 @@ const LOD_SCALE_MOTION = isCoarsePointer
   ? 0.75
   : isLowEndDevice ? 1.05 : 0.95
 const LOD_SCALE_FINE = 6.0
+const MESH_LOD_SCALE_COARSE = isCoarsePointer ? 0.35 : 0.55
+const MESH_LOD_SCALE_FINE = 1.0
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = isCoarsePointer ? 1.0 : 0.35
@@ -424,6 +426,7 @@ function requestCoarseLod(seconds = LOD_SETTLE_DELAY_SECONDS) {
   lodRampState.settleTime = 0
   if (lodRampState.active && activeSplat) {
     spark.lodSplatScale = LOD_SCALE_COARSE
+    activeSplat.lodScale = MESH_LOD_SCALE_COARSE
   }
 }
 
@@ -1769,6 +1772,9 @@ function initializeLodRamp() {
   lodPerfState.frameMs = LOD_TARGET_FRAME_MS
   lodPerfState.quality = 1
   spark.lodSplatScale = LOD_SCALE_COARSE
+  if (activeSplat) {
+    activeSplat.lodScale = MESH_LOD_SCALE_COARSE
+  }
 }
 
 function updateLodPerfBudget(deltaTime) {
@@ -2015,12 +2021,18 @@ function updateAdaptiveLod(deltaTime) {
   if (coarseRequested) {
     lodRampState.settleTime = 0
     spark.lodSplatScale = LOD_SCALE_COARSE
+    activeSplat.lodScale = MESH_LOD_SCALE_COARSE
   } else if (motion > LOD_MOTION_THRESHOLD) {
     lodRampState.settleTime = 0
     const budgetedMotionScale = getBudgetedLodScale(LOD_SCALE_MOTION)
     spark.lodSplatScale = THREE.MathUtils.lerp(
       spark.lodSplatScale,
       budgetedMotionScale,
+      LOD_MOTION_LERP_ALPHA
+    )
+    activeSplat.lodScale = THREE.MathUtils.lerp(
+      activeSplat.lodScale ?? MESH_LOD_SCALE_FINE,
+      MESH_LOD_SCALE_COARSE,
       LOD_MOTION_LERP_ALPHA
     )
   } else {
@@ -2033,6 +2045,11 @@ function updateAdaptiveLod(deltaTime) {
     spark.lodSplatScale = THREE.MathUtils.lerp(
       spark.lodSplatScale,
       budgetedTargetScale,
+      LOD_SETTLED_LERP_ALPHA
+    )
+    activeSplat.lodScale = THREE.MathUtils.lerp(
+      activeSplat.lodScale ?? MESH_LOD_SCALE_FINE,
+      MESH_LOD_SCALE_FINE,
       LOD_SETTLED_LERP_ALPHA
     )
   }
