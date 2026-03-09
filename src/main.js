@@ -1,6 +1,6 @@
 import './style.css'
 import * as THREE from 'three'
-import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark'
+import { SparkRenderer, SplatMesh, SplatFileType } from '@sparkjsdev/spark'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const MOVE_SPEED = 5
@@ -1471,9 +1471,11 @@ async function loadPoseFile(file, imageFiles = []) {
 }
 
 async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
+  const fileType = getSparkFileType(fileName)
   const mesh = new SplatMesh({
     fileBytes,
     fileName,
+    fileType,
     lod: useLod,
     nonLod: true,
     enableLod: false,
@@ -1485,6 +1487,38 @@ async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
   } catch (error) {
     mesh.dispose?.()
     throw error
+  }
+}
+
+function getSparkFileType(fileName) {
+  const ext = getFileExtension(fileName)
+  if (ext === '.ply') return SplatFileType.PLY
+  if (ext === '.spz') return SplatFileType.SPZ
+  if (ext === '.splat') return SplatFileType.SPLAT
+  if (ext === '.ksplat') return SplatFileType.KSPLAT
+  return undefined
+}
+
+async function createInitializedSplatMeshFromUrl(file, useLod) {
+  const objectUrl = URL.createObjectURL(file)
+  const fileType = getSparkFileType(file.name)
+  const mesh = new SplatMesh({
+    url: objectUrl,
+    fileName: file.name,
+    fileType,
+    lod: useLod,
+    nonLod: true,
+    enableLod: false,
+    behindFoveate: 1.0,
+  })
+  try {
+    await mesh.initialized
+    return mesh
+  } catch (error) {
+    mesh.dispose?.()
+    throw error
+  } finally {
+    URL.revokeObjectURL(objectUrl)
   }
 }
 
@@ -1525,7 +1559,16 @@ async function loadLocalSplat(file) {
       console.warn('LoD init unstable on iPad, retrying stable mode', error)
       lodStatus.textContent = 'Retrying stable iPad mode...'
       loadedWithLod = false
-      nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, false)
+      try {
+        nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, false)
+      } catch (stableError) {
+        console.warn(
+          'Byte decode failed on iPad, retrying URL compatibility mode',
+          stableError
+        )
+        lodStatus.textContent = 'Retrying Safari compatibility mode...'
+        nextSplat = await createInitializedSplatMeshFromUrl(file, false)
+      }
     }
 
     nextSplat.rotation.x = SCENE_ALIGNMENT_ROTATION_X
