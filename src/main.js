@@ -1,15 +1,7 @@
 import './style.css'
 import * as THREE from 'three'
-import {
-  SparkRenderer,
-  SplatMesh,
-  SplatFileType,
-  PackedSplats,
-  unpackSplats,
-} from '@sparkjsdev/spark'
+import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-
-window.__SPARK_TEST_BUILD__ = '2026-03-09-restore-1'
 
 const MOVE_SPEED = 5
 const LOOK_SPEED = 1.1
@@ -64,9 +56,8 @@ const LOD_QUALITY_FLOOR = isCoarsePointer
   : 0
 const LOD_MOTION_LERP_ALPHA = 0.35
 const LOD_SETTLED_LERP_ALPHA = 0.12
-const IOS_SPLAT_INIT_RETRIES = isAppleMobileLike ? 2 : 0
-const IOS_SPLAT_INIT_RETRY_DELAY_MS = 220
-const IOS_MAX_PIXEL_RATIO = 1.5
+const IOS_SPLAT_INIT_RETRIES = isAppleMobileLike ? 1 : 0
+const IOS_SPLAT_INIT_RETRY_DELAY_MS = 140
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 const ORBIT_RADIUS = INITIAL_CAMERA_POSITION.distanceTo(INITIAL_TARGET)
@@ -120,10 +111,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: false })
 renderer.setClearColor('#000000', 1)
 
 function updateRendererViewport() {
-  const pixelRatio = isAppleMobileLike
-    ? Math.min(window.devicePixelRatio, IOS_MAX_PIXEL_RATIO)
-    : window.devicePixelRatio
-  renderer.setPixelRatio(pixelRatio)
+  renderer.setPixelRatio(window.devicePixelRatio)
   renderer.setSize(window.innerWidth, window.innerHeight)
 }
 
@@ -442,6 +430,9 @@ function nowSeconds() {
 }
 
 function requestCoarseLod(seconds = LOD_SETTLE_DELAY_SECONDS) {
+  if (isAppleMobileLike) {
+    return
+  }
   lodRampState.forceCoarseUntil = Math.max(
     lodRampState.forceCoarseUntil,
     nowSeconds() + seconds
@@ -1482,40 +1473,10 @@ async function loadPoseFile(file, imageFiles = []) {
   }
 }
 
-async function createInitializedDecodedSplatMesh(fileBytes, fileName, useLod) {
-  const fileType = getExplicitSparkFileType(fileName)
-  const decoded = await unpackSplats({
-    input: fileBytes,
-    fileType,
-    pathOrUrl: fileName,
-  })
-  const packedSplats = new PackedSplats({
-    packedArray: decoded.packedArray,
-    numSplats: decoded.numSplats,
-    extra: decoded.extra,
-  })
-  const mesh = new SplatMesh({
-    packedSplats,
-    lod: useLod,
-    nonLod: true,
-    enableLod: false,
-    behindFoveate: 1.0,
-  })
-  try {
-    await mesh.initialized
-    return mesh
-  } catch (error) {
-    mesh.dispose?.()
-    throw error
-  }
-}
-
-async function createInitializedNativeSplatMesh(fileBytes, fileName, useLod) {
-  const fileType = getSparkFileType(fileName)
+async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
   const mesh = new SplatMesh({
     fileBytes,
     fileName,
-    fileType,
     lod: useLod,
     nonLod: true,
     enableLod: false,
@@ -1528,31 +1489,6 @@ async function createInitializedNativeSplatMesh(fileBytes, fileName, useLod) {
     mesh.dispose?.()
     throw error
   }
-}
-
-async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
-  if (isAppleMobileLike) {
-    return createInitializedDecodedSplatMesh(fileBytes, fileName, useLod)
-  }
-  return createInitializedNativeSplatMesh(fileBytes, fileName, useLod)
-}
-
-function getSparkFileType(fileName) {
-  const ext = getFileExtension(fileName)
-  if (ext === '.ply') return SplatFileType.PLY
-  if (ext === '.spz') return SplatFileType.SPZ
-  if (ext === '.splat') return SplatFileType.SPLAT
-  if (ext === '.ksplat') return SplatFileType.KSPLAT
-  if (ext === '.sog') return SplatFileType.PCSOGS
-  if (ext === '.sogs') return SplatFileType.PCSOGSZIP
-  return undefined
-}
-
-function getExplicitSparkFileType(fileName) {
-  const ext = getFileExtension(fileName)
-  if (ext === '.splat') return SplatFileType.SPLAT
-  if (ext === '.ksplat') return SplatFileType.KSPLAT
-  return undefined
 }
 
 async function createInitializedSplatMeshWithRetry(fileBytes, fileName, useLod) {
@@ -1580,13 +1516,19 @@ async function loadLocalSplat(file) {
   lodStatus.textContent = `Loading local file: ${file.name}`
 
   try {
-    let nextSplat = null
-    let loadedWithLod = !isAppleMobileLike
     const fileBytes = new Uint8Array(await file.arrayBuffer())
-    if (isAppleMobileLike) {
-      nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, false)
-    } else {
+    let nextSplat = null
+    let loadedWithLod = true
+    try {
       nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, true)
+    } catch (error) {
+      if (!isAppleMobileLike) {
+        throw error
+      }
+      console.warn('LoD init unstable on iPad, retrying stable mode', error)
+      lodStatus.textContent = 'Retrying stable iPad mode...'
+      loadedWithLod = false
+      nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, false)
     }
 
     nextSplat.rotation.x = SCENE_ALIGNMENT_ROTATION_X
@@ -1599,17 +1541,13 @@ async function loadLocalSplat(file) {
       prevSplat.dispose()
     }
 
-    resetView()
-
     if (loadedWithLod) {
-      initializeLod(activeSplat).catch((error) => {
-        console.error('Failed to initialize LoD tree', error)
-      })
+      await initializeLod(activeSplat)
     } else {
       lodRampState.active = false
       lodStatus.textContent = `Loaded (stable mode): ${file.name}`
     }
-
+    resetView()
     if (loadedWithLod) {
       lodStatus.textContent = `Loaded: ${file.name}`
     }
@@ -1841,6 +1779,20 @@ function hasGeneratedLod(mesh) {
 }
 
 function initializeLodRamp() {
+  if (isAppleMobileLike) {
+    lodRampState.active = false
+    lodRampState.settleTime = 0
+    lodRampState.fineMode = true
+    lodRampState.noInputSince = nowSeconds()
+    spark.lodSplatScale = 1.0
+    spark.minSortIntervalMs = BASE_MIN_SORT_INTERVAL_MS
+    spark.minPixelRadius = BASE_MIN_PIXEL_RADIUS
+    spark.minAlpha = BASE_MIN_ALPHA
+    if (activeSplat) {
+      activeSplat.lodScale = 1.0
+    }
+    return
+  }
   lodRampState.active = true
   lodRampState.settleTime = 0
   lodRampState.fineMode = false
