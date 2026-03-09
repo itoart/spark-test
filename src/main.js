@@ -430,9 +430,6 @@ function nowSeconds() {
 }
 
 function requestCoarseLod(seconds = LOD_SETTLE_DELAY_SECONDS) {
-  if (isAppleMobileLike) {
-    return
-  }
   lodRampState.forceCoarseUntil = Math.max(
     lodRampState.forceCoarseUntil,
     nowSeconds() + seconds
@@ -1779,20 +1776,6 @@ function hasGeneratedLod(mesh) {
 }
 
 function initializeLodRamp() {
-  if (isAppleMobileLike) {
-    lodRampState.active = false
-    lodRampState.settleTime = 0
-    lodRampState.fineMode = true
-    lodRampState.noInputSince = nowSeconds()
-    spark.lodSplatScale = 1.0
-    spark.minSortIntervalMs = BASE_MIN_SORT_INTERVAL_MS
-    spark.minPixelRadius = BASE_MIN_PIXEL_RADIUS
-    spark.minAlpha = BASE_MIN_ALPHA
-    if (activeSplat) {
-      activeSplat.lodScale = 1.0
-    }
-    return
-  }
   lodRampState.active = true
   lodRampState.settleTime = 0
   lodRampState.fineMode = false
