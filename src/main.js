@@ -25,7 +25,7 @@ const LOD_SCALE_COARSE = isCoarsePointer
   ? isAppleMobileLike ? 0.9 : 0.8
   : isLowEndDevice ? 0.75 : 0.65
 const LOD_SCALE_MOTION = isCoarsePointer
-  ? isAppleMobileLike ? 0.95 : 0.9
+  ? 0.75
   : isLowEndDevice ? 1.05 : 0.95
 const LOD_SCALE_FINE = 6.0
 const LOD_RAMP_SECONDS = 2.2
@@ -421,6 +421,11 @@ function requestCoarseLod(seconds = LOD_SETTLE_DELAY_SECONDS) {
     lodRampState.forceCoarseUntil,
     nowSeconds() + seconds
   )
+  lodRampState.settleTime = 0
+  lodPerfState.quality = LOD_QUALITY_FLOOR
+  if (lodRampState.active && activeSplat) {
+    spark.lodSplatScale = LOD_SCALE_COARSE
+  }
 }
 
 function waitMs(ms) {
