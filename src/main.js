@@ -30,7 +30,7 @@ const LOD_SCALE_MOTION = isCoarsePointer
 const LOD_SCALE_FINE = 6.0
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
-const LOD_SETTLE_DELAY_SECONDS = 0.35
+const LOD_SETTLE_DELAY_SECONDS = isCoarsePointer ? 1.0 : 0.35
 const LOD_TARGET_FPS = isCoarsePointer ? 30 : 60
 const LOD_TARGET_FRAME_MS = 1000 / LOD_TARGET_FPS
 const LOD_FRAME_EMA_ALPHA = 0.2
@@ -1990,8 +1990,25 @@ function updateAdaptiveLod(deltaTime) {
   const positionDelta = camera.position.distanceTo(lodRampState.lastPos)
   const angleDelta = camera.quaternion.angleTo(lodRampState.lastQuat)
   const motion = positionDelta + angleDelta * 2.0
+  const hasMovementInput =
+    Math.abs(touchInput.moveX) > 1e-3 ||
+    Math.abs(touchInput.moveY) > 1e-3 ||
+    keyState.KeyW ||
+    keyState.KeyA ||
+    keyState.KeyS ||
+    keyState.KeyD ||
+    keyState.KeyQ ||
+    keyState.KeyE
+  const hasLookInput =
+    Math.abs(touchInput.lookX) > 1e-3 ||
+    Math.abs(touchInput.lookY) > 1e-3 ||
+    desktopLookState.dragging ||
+    desktopStrafeState.dragging
+  const hasInteractionInput = hasMovementInput || hasLookInput
   const coarseRequested =
-    lodRampState.controlsInteracting || nowSeconds() < lodRampState.forceCoarseUntil
+    hasInteractionInput ||
+    lodRampState.controlsInteracting ||
+    nowSeconds() < lodRampState.forceCoarseUntil
 
   if (coarseRequested) {
     lodRampState.settleTime = 0
