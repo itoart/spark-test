@@ -27,8 +27,8 @@ const isLowEndDevice = cpuCores <= 6 || deviceMemoryGb <= 4
 const isAppleMobileLike =
   /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-const BASE_MIN_PIXEL_RADIUS = isCoarsePointer ? 0.5 : 0.32
-const BASE_MIN_ALPHA = isCoarsePointer ? 0.0075 : 0.0045
+const BASE_MIN_PIXEL_RADIUS = isCoarsePointer ? 0.5 : 0.28
+const BASE_MIN_ALPHA = isCoarsePointer ? 0.0075 : 0.0038
 const BASE_MIN_SORT_INTERVAL_MS = isCoarsePointer
   ? isAppleMobileLike ? 12 : 16
   : isLowEndDevice ? 24 : 12
@@ -38,9 +38,9 @@ const INTERACTION_MIN_SORT_INTERVAL_MS = isCoarsePointer ? 48 : BASE_MIN_SORT_IN
 const LOD_SCALE_COARSE = isCoarsePointer
   ? 0.6
   : isLowEndDevice ? 0.75 : 0.65
-const LOD_SCALE_FINE = isCoarsePointer ? 2.4 : 7.5
+const LOD_SCALE_FINE = isCoarsePointer ? 2.4 : 9.0
 const MESH_LOD_SCALE_COARSE = isCoarsePointer ? 0.35 : 0.55
-const MESH_LOD_SCALE_FINE = isCoarsePointer ? 0.85 : 1.1
+const MESH_LOD_SCALE_FINE = isCoarsePointer ? 0.85 : 1.2
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = isCoarsePointer ? 1.0 : 0.35
@@ -64,7 +64,7 @@ const LOD_MOTION_LERP_ALPHA = 0.35
 const LOD_SETTLED_LERP_ALPHA = 0.12
 const IOS_SPLAT_INIT_RETRIES = isAppleMobileLike ? 1 : 0
 const IOS_SPLAT_INIT_RETRY_DELAY_MS = 140
-const IOS_MAX_PIXEL_RATIO = 1.75
+const IOS_MAX_PIXEL_RATIO = 2.0
 const INITIAL_CAMERA_POSITION = new THREE.Vector3(0, 2.2, 20)
 const INITIAL_TARGET = new THREE.Vector3(0, 2.2, 0)
 const ORBIT_RADIUS = INITIAL_CAMERA_POSITION.distanceTo(INITIAL_TARGET)
@@ -1028,8 +1028,8 @@ for (const eventName of ['pointerdown', 'pointermove', 'pointerup', 'pointercanc
 const spark = new SparkRenderer({
   renderer,
   enableLod: true,
-  maxStdDev: Math.sqrt(isCoarsePointer ? 5 : 6),
-  maxPixelRadius: isCoarsePointer ? (isAppleMobileLike ? 320 : 288) : 320,
+  maxStdDev: Math.sqrt(isCoarsePointer ? 5 : 7),
+  maxPixelRadius: isCoarsePointer ? (isAppleMobileLike ? 320 : 288) : 384,
   minPixelRadius: BASE_MIN_PIXEL_RADIUS,
   minAlpha: BASE_MIN_ALPHA,
   minSortIntervalMs: BASE_MIN_SORT_INTERVAL_MS,
@@ -1616,6 +1616,7 @@ async function loadLocalSplat(file) {
       await initializeLod(activeSplat)
     } else {
       lodRampState.active = false
+      applyFineDisplayQuality(activeSplat)
       lodStatus.textContent = `Loaded (stable mode): ${file.name}`
     }
     resetView()
@@ -1849,19 +1850,23 @@ function hasGeneratedLod(mesh) {
   return Boolean(mesh.packedSplats?.lodSplats || mesh.extSplats?.lodSplats)
 }
 
+function applyFineDisplayQuality(targetSplat = activeSplat) {
+  spark.lodSplatScale = LOD_SCALE_FINE
+  spark.minSortIntervalMs = BASE_MIN_SORT_INTERVAL_MS
+  spark.minPixelRadius = BASE_MIN_PIXEL_RADIUS
+  spark.minAlpha = BASE_MIN_ALPHA
+  if (targetSplat) {
+    targetSplat.lodScale = MESH_LOD_SCALE_FINE
+  }
+}
+
 function initializeLodRamp() {
   if (isAppleMobileLike) {
     lodRampState.active = false
     lodRampState.settleTime = 0
     lodRampState.fineMode = true
     lodRampState.noInputSince = nowSeconds()
-    spark.lodSplatScale = 1.0
-    spark.minSortIntervalMs = BASE_MIN_SORT_INTERVAL_MS
-    spark.minPixelRadius = BASE_MIN_PIXEL_RADIUS
-    spark.minAlpha = BASE_MIN_ALPHA
-    if (activeSplat) {
-      activeSplat.lodScale = 1.0
-    }
+    applyFineDisplayQuality()
     return
   }
   lodRampState.active = true
