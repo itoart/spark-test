@@ -46,15 +46,15 @@ const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = isCoarsePointer ? 1.0 : 0.35
 const LOD_TARGET_FPS = isCoarsePointer ? 30 : 60
 const LOD_TARGET_FRAME_MS = 1000 / LOD_TARGET_FPS
-const LOD_FINE_PROMOTE_FRAME_MULTIPLIER = isCoarsePointer ? 0.9 : 0.85
+const LOD_FINE_PROMOTE_FRAME_MULTIPLIER = isCoarsePointer ? 0.9 : 1.04
 const LOD_FINE_PROMOTE_STABLE_SECONDS = isCoarsePointer ? 1.0 : 0.4
-const LOD_FINE_DEMOTE_FRAME_MULTIPLIER = isCoarsePointer ? 1.08 : 1.03
+const LOD_FINE_DEMOTE_FRAME_MULTIPLIER = isCoarsePointer ? 1.08 : 1.18
 const LOD_FINE_DEMOTE_MOTION_MULTIPLIER = 2.0
 const LOD_FRAME_EMA_ALPHA = 0.2
-const LOD_SLOW_FRAME_MULTIPLIER = isCoarsePointer ? 1.45 : 1.08
-const LOD_FAST_FRAME_MULTIPLIER = isCoarsePointer ? 0.8 : 0.88
-const LOD_QUALITY_DROP_PER_SEC = isCoarsePointer ? 0.45 : 0.65
-const LOD_QUALITY_RISE_PER_SEC = isCoarsePointer ? 0.2 : 0.3
+const LOD_SLOW_FRAME_MULTIPLIER = isCoarsePointer ? 1.45 : 1.18
+const LOD_FAST_FRAME_MULTIPLIER = isCoarsePointer ? 0.8 : 0.96
+const LOD_QUALITY_DROP_PER_SEC = isCoarsePointer ? 0.45 : 0.28
+const LOD_QUALITY_RISE_PER_SEC = isCoarsePointer ? 0.2 : 0.4
 const LOD_QUALITY_DROP_OVERSHOOT_CAP = 2
 const LOD_QUALITY_RISE_HEADROOM_CAP = 1.6
 const LOD_QUALITY_FLOOR = isCoarsePointer
@@ -444,6 +444,24 @@ function supportsAdaptiveLod(targetSplat = activeSplat) {
   return Boolean(targetSplat?.userData?.supportsAdaptiveLod)
 }
 
+function shouldMatchAndroidAdaptiveLod(targetSplat = activeSplat) {
+  return isAppleMobileLike && isCoarsePointer && supportsAdaptiveLod(targetSplat)
+}
+
+function getBaseSortIntervalMs(targetSplat = activeSplat) {
+  if (shouldMatchAndroidAdaptiveLod(targetSplat)) {
+    return 16
+  }
+  return BASE_MIN_SORT_INTERVAL_MS
+}
+
+function getLodQualityFloor(targetSplat = activeSplat) {
+  if (shouldMatchAndroidAdaptiveLod(targetSplat)) {
+    return 0.25
+  }
+  return LOD_QUALITY_FLOOR
+}
+
 function requestCoarseLod(seconds = LOD_SETTLE_DELAY_SECONDS) {
   if (isAppleMobileLike && !supportsAdaptiveLod()) {
     return
@@ -466,7 +484,7 @@ function waitMs(ms) {
 }
 
 function clampLodQuality(value) {
-  return THREE.MathUtils.clamp(value, LOD_QUALITY_FLOOR, 1)
+  return THREE.MathUtils.clamp(value, getLodQualityFloor(), 1)
 }
 
 function getLodRampTargetScale(settleTime) {
@@ -1857,7 +1875,7 @@ function hasGeneratedLod(mesh) {
 
 function applyFineDisplayQuality(targetSplat = activeSplat) {
   spark.lodSplatScale = LOD_SCALE_FINE
-  spark.minSortIntervalMs = BASE_MIN_SORT_INTERVAL_MS
+  spark.minSortIntervalMs = getBaseSortIntervalMs(targetSplat)
   spark.minPixelRadius = BASE_MIN_PIXEL_RADIUS
   spark.minAlpha = BASE_MIN_ALPHA
   if (targetSplat) {
@@ -2152,7 +2170,7 @@ function updateAdaptiveLod(deltaTime) {
     spark.minAlpha = INTERACTION_MIN_ALPHA
     activeSplat.lodScale = MESH_LOD_SCALE_COARSE
   } else {
-    spark.minSortIntervalMs = BASE_MIN_SORT_INTERVAL_MS
+    spark.minSortIntervalMs = getBaseSortIntervalMs(activeSplat)
     spark.minPixelRadius = BASE_MIN_PIXEL_RADIUS
     spark.minAlpha = BASE_MIN_ALPHA
     if (lodRampState.fineMode) {
