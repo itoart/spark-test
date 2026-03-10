@@ -27,8 +27,8 @@ const isLowEndDevice = cpuCores <= 6 || deviceMemoryGb <= 4
 const isAppleMobileLike =
   /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-const BASE_MIN_PIXEL_RADIUS = isCoarsePointer ? 0.5 : 0.28
-const BASE_MIN_ALPHA = isCoarsePointer ? 0.0075 : 0.0038
+const BASE_MIN_PIXEL_RADIUS = isCoarsePointer ? 0.5 : 0.22
+const BASE_MIN_ALPHA = isCoarsePointer ? 0.0075 : 0.0032
 const BASE_MIN_SORT_INTERVAL_MS = isCoarsePointer
   ? isAppleMobileLike ? 12 : 16
   : isLowEndDevice ? 24 : 12
@@ -38,9 +38,9 @@ const INTERACTION_MIN_SORT_INTERVAL_MS = isCoarsePointer ? 48 : BASE_MIN_SORT_IN
 const LOD_SCALE_COARSE = isCoarsePointer
   ? 0.6
   : isLowEndDevice ? 0.75 : 0.65
-const LOD_SCALE_FINE = isCoarsePointer ? 2.4 : 9.0
+const LOD_SCALE_FINE = isCoarsePointer ? 2.4 : 12.0
 const MESH_LOD_SCALE_COARSE = isCoarsePointer ? 0.35 : 0.55
-const MESH_LOD_SCALE_FINE = isCoarsePointer ? 0.85 : 1.2
+const MESH_LOD_SCALE_FINE = isCoarsePointer ? 0.85 : 1.35
 const LOD_RAMP_SECONDS = 2.2
 const LOD_MOTION_THRESHOLD = 0.015
 const LOD_SETTLE_DELAY_SECONDS = isCoarsePointer ? 1.0 : 0.35
@@ -58,7 +58,7 @@ const LOD_QUALITY_RISE_PER_SEC = isCoarsePointer ? 0.2 : 0.3
 const LOD_QUALITY_DROP_OVERSHOOT_CAP = 2
 const LOD_QUALITY_RISE_HEADROOM_CAP = 1.6
 const LOD_QUALITY_FLOOR = isCoarsePointer
-  ? isAppleMobileLike ? 0.35 : 0.25
+  ? isAppleMobileLike ? 0.35 : 0.15
   : 0
 const LOD_MOTION_LERP_ALPHA = 0.35
 const LOD_SETTLED_LERP_ALPHA = 0.12
@@ -440,8 +440,12 @@ function nowSeconds() {
   return performance.now() * 0.001
 }
 
+function supportsAdaptiveLod(targetSplat = activeSplat) {
+  return Boolean(targetSplat?.userData?.supportsAdaptiveLod)
+}
+
 function requestCoarseLod(seconds = LOD_SETTLE_DELAY_SECONDS) {
-  if (isAppleMobileLike) {
+  if (isAppleMobileLike && !supportsAdaptiveLod()) {
     return
   }
   lodRampState.forceCoarseUntil = Math.max(
@@ -1028,8 +1032,8 @@ for (const eventName of ['pointerdown', 'pointermove', 'pointerup', 'pointercanc
 const spark = new SparkRenderer({
   renderer,
   enableLod: true,
-  maxStdDev: Math.sqrt(isCoarsePointer ? 5 : 7),
-  maxPixelRadius: isCoarsePointer ? (isAppleMobileLike ? 320 : 288) : 384,
+  maxStdDev: Math.sqrt(isCoarsePointer ? 5 : 8),
+  maxPixelRadius: isCoarsePointer ? (isAppleMobileLike ? 320 : 288) : 512,
   minPixelRadius: BASE_MIN_PIXEL_RADIUS,
   minAlpha: BASE_MIN_ALPHA,
   minSortIntervalMs: BASE_MIN_SORT_INTERVAL_MS,
@@ -1607,6 +1611,7 @@ async function loadLocalSplat(file) {
 
     const prevSplat = activeSplat
     activeSplat = nextSplat
+    activeSplat.userData.supportsAdaptiveLod = loadedWithLod
     if (prevSplat) {
       scene.remove(prevSplat)
       prevSplat.dispose()
@@ -1861,7 +1866,7 @@ function applyFineDisplayQuality(targetSplat = activeSplat) {
 }
 
 function initializeLodRamp() {
-  if (isAppleMobileLike) {
+  if (isAppleMobileLike && !supportsAdaptiveLod()) {
     lodRampState.active = false
     lodRampState.settleTime = 0
     lodRampState.fineMode = true
