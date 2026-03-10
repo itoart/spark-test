@@ -78,6 +78,7 @@ const SPLAT_EXTENSIONS = new Set([
   '.sog',
   '.sogs',
   '.spz',
+  '.rad',
   '.splat',
   '.ksplat',
   '.json',
@@ -100,7 +101,7 @@ const IMAGE_VIEW_MIN_SCALE = 0.7
 const IMAGE_VIEW_MAX_SCALE = 8
 const MARKER_WARP_BACK_OFFSET = 2.5
 const DEFAULT_INPUT_ACCEPT =
-  '.ply,.sog,.sogs,.spz,.splat,.ksplat,.json,.zip,.txt,.csv,.jpg,.jpeg,.png,.webp,.bmp,.gif,.tif,.tiff'
+  '.ply,.sog,.sogs,.spz,.rad,.splat,.ksplat,.json,.zip,.txt,.csv,.jpg,.jpeg,.png,.webp,.bmp,.gif,.tif,.tiff'
 const INPUT_ACCEPT = isAppleMobileLike ? '*/*' : DEFAULT_INPUT_ACCEPT
 
 const scene = new THREE.Scene()
@@ -1487,6 +1488,7 @@ async function createInitializedSplatMesh(fileBytes, fileName, useLod) {
   const mesh = new SplatMesh({
     fileBytes,
     fileName,
+    fileType: getSparkFileType(fileName),
     lod: useLod,
     nonLod: true,
     enableLod: false,
@@ -1535,6 +1537,18 @@ function getExplicitSparkFileType(fileName) {
   return undefined
 }
 
+function getSparkFileType(fileName) {
+  const ext = getFileExtension(fileName)
+  if (ext === '.ply') return SplatFileType.PLY
+  if (ext === '.spz') return SplatFileType.SPZ
+  if (ext === '.rad') return SplatFileType.RAD
+  if (ext === '.splat') return SplatFileType.SPLAT
+  if (ext === '.ksplat') return SplatFileType.KSPLAT
+  if (ext === '.sog') return SplatFileType.PCSOGS
+  if (ext === '.sogs') return SplatFileType.PCSOGSZIP
+  return undefined
+}
+
 async function createInitializedSplatMeshWithRetry(fileBytes, fileName, useLod) {
   let lastError = null
   for (let attempt = 0; attempt <= IOS_SPLAT_INIT_RETRIES; attempt += 1) {
@@ -1562,14 +1576,23 @@ async function loadLocalSplat(file) {
   try {
     const fileBytes = new Uint8Array(await file.arrayBuffer())
     let nextSplat = null
-    let loadedWithLod = !isAppleMobileLike
+    const isPrebuiltLodFile = getFileExtension(file.name) === '.rad'
+    let loadedWithLod = !isAppleMobileLike || isPrebuiltLodFile
 
     if (isAppleMobileLike) {
       try {
-        nextSplat = await createInitializedSplatMeshWithRetry(fileBytes, file.name, false)
+        nextSplat = await createInitializedSplatMeshWithRetry(
+          fileBytes,
+          file.name,
+          isPrebuiltLodFile
+        )
       } catch (error) {
+        if (isPrebuiltLodFile) {
+          throw error
+        }
         console.warn('Native iPad loader failed, retrying fallback mode', error)
         lodStatus.textContent = 'Retrying stable iPad mode...'
+        loadedWithLod = false
         nextSplat = await createInitializedFallbackSplatMesh(fileBytes, file.name)
       }
     } else {
